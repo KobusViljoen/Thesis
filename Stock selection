@@ -1,0 +1,51 @@
+#### packages required
+library(broom)
+library(modelr)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+
+##### Going to need the dates tibble created in file where I extracted data from Bloomberg
+
+#### Concatenating the AllData file extracted from bloomberg
+AllData <- AllData %>%
+  bind_rows(.id = "Ticker") %>%
+  group_by(Ticker) %>%
+  nest()
+  
+## Function to select 180 days prior to semi_annual date, to compute Z-score of fundamentals
+## This function runs through all the semi-annual dates and slecting corresponding z_scores
+## Then the function is applied to all the stocks with the map function
+z_score <- function(df1){
+  all <- dates %>% mutate(sel = map(date,function(df){
+    sel <- df1 %>% filter(date <= df) %>% filter(date >= df - days(180))
+    tibble(date=sel$date , PE_Z = (sel$PE_RATIO - mean(sel$PE_RATIO,na.rm = T))/sd(sel$PE_RATIO,na.rm = T),
+           ROE_Z = (sel$RETURN_COM_EQY - mean(sel$RETURN_COM_EQY,na.rm = T))/sd(sel$RETURN_COM_EQY,na.rm = T),
+           DIV_Z = (sel$BEST_DIV_YLD - mean(sel$BEST_DIV_YLD,na.rm = T))/sd(sel$BEST_DIV_YLD,na.rm = T),
+           VOL_Z = (sel$VOLATILITY_180D - mean(sel$VOLATILITY_180D,na.rm = T))/sd(sel$VOLATILITY_180D,na.rm = T),
+           Market_Cap = sel$CUR_MKT_CAP) %>%
+      filter(date == df)
+  }))
+  all$sel %>% bind_rows()
+}
+
+vb <- AllData %>% mutate(sel = map(data,z_score))
+## Called it vb because it was a test, the correct fundamental factors should still be incorporated
+
+## grouped the data according to date, I now have the semi-annual dates with all the corresponding shares and their fundamental z-scores
+### To clean this data, filtered out the shares without a market cap (MC) and selected the stocks with a MC up to the 95th percentile
+clean <- vb$sel %>% bind_rows(.id="Ticker") %>% mutate(Ticker = vb$Ticker[as.numeric(Ticker)])
+clean <- clean %>% group_by(date) %>% arrange(date) %>% nest()
+
+## Stocks that are eligible for selection
+stocks <- function(df){
+  df %>%
+  filter(!is.na(Market_Cap)) %>% 
+  filter(Market_Cap > quantile(Market_Cap,0.05))
+}
+
+clean <- clean %>% mutate(stocks = map(data,stocks))
