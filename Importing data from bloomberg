@@ -1,0 +1,75 @@
+# Installing packages to extract data from bloomberg and clean my data
+install.packages(c("dplyr","tidyr","purrr","lubridate","Rblpapi"))
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(Rblpapi)
+
+## Setup a connection with bloomberg
+con <- blpConnect()
+
+# Created an equity screen in Bloomberg which will extract all the shares listed on the JSE and also their fundamental data
+### Screen called : AllData
+### This screen is done to extract the Tickers of the shares for which I'm going to do analysis on
+eqs15 <- beqs(screenName = "AllData",date = ymd("20150101"))
+### Extracting tickers
+TickerNames15 <- eqs15$Ticker
+
+## Different periodic samples for extraction from bloomberg
+monthly <- c("periodicitySelection"="MONTHLY",
+           "periodicityAdjustment"="CALENDAR")
+quarterly <- c("periodicitySelection"="QUARTERLY",
+               "periodicityAdjustment"="CALENDAR")
+halfyearly <- c("periodicitySelection"="SEMI_ANNUALLY",
+                "periodicityAdjustment"="CALENDAR")
+yearly <- c("periodicitySelection"="YEARLY",
+              "periodicityAdjustment"="CALENDAR")
+              
+## Extracting historical prices from Bloomberg
+### Should try using a "map" function, mapping the different options to the bdh function
+monthly_price_data <- bdh(securities = as.character(TickerNames15),
+                    fields = "PX_LAST",
+                    start.date=ymd("1995-01-01"),
+                    options=monthly)
+quarterly_price_data <- bdh(securities = as.character(TickerNames15),
+                          fields = "PX_LAST",
+                          start.date=ymd("1995-01-01"),
+                          options=quarterly)
+halfyearly_price_data <- bdh(securities = as.character(TickerNames15),
+                          fields = "PX_LAST",
+                          start.date=ymd("1995-01-01"),
+                          options=halfyearly)
+yearly_price_data <- bdh(securities = as.character(TickerNames15),
+                          fields = "PX_LAST",
+                          start.date=ymd("1995-01-01"),
+                          options=yearly)
+daily_price_date <- bdh(securities = as.character(TickerNames15),
+                        fields = "PX_LAST",
+                        start.date=ymd("1995-01-01"))
+                        
+#### I want to do an equity screen every six months
+### extract dates from the halfyearly_price_data
+d <- halfyearly_price_data %>%
+  bind_rows(.id = "Ticker") %>%
+  group_by(date) %>%
+  nest()
+dates <- tibble(date = d$date)
+## function that would do an equity screen for a specific data
+eqs <- function(df){
+  beqs(screenName = "AllData",date = ymd(df))
+}
+### Mutating dates tibble with an equity screen for each of the dates
+A_EQS <- dates %>% mutate(eqs = map(date,eqs))
+
+## to calculate z-scores for my fundamental factors, historical data is required for all the factors
+#### This was done as an example, these aren't the correct factors
+AllData <- bdh(securities = as.character(TickerNames15),
+               fields = c("CUR_MKT_CAP",
+                          "PE_RATIO",
+                          "RETURN_COM_EQY",
+                          "BEST_DIV_YLD",
+                          "PX_LAST",
+                          "VOLATILITY_180D",
+                          "TOT_DEBT_TO_TOT_EQY")
+               ,start.date=ymd("1995-01-01"))
