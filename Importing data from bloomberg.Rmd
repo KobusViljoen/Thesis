@@ -1,0 +1,74 @@
+---
+title: "importing data from bloomberg"
+author: "Kobus Viljoen"
+date: "28 September 2016"
+output: html_document
+---
+
+##Installing packages to extract data from bloomberg and clean my data
+
+```{r installing ,eval=FALSE}
+install.packages(c("dplyr","tidyr","purrr","lubridate","Rblpapi"))
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(Rblpapi)
+```
+
+
+##Setup a connection with bloomberg
+```{r ,eval=FALSE}
+con <- blpConnect()
+```
+
+An equity screen is done to extract all of the stocks listed on the JSE
+The screen's name is AllData, it also looks at the relevant fundamental factors of the stocks
+```{r , eval=FALSE}
+eqs15 <- beqs(screenName = "AllData",date = ymd("20150101"))
+TickerNames15 <- eqs15$Ticker
+```
+
+##Closing prices extraction from bloomberg
+Different periodic sample lengths are created. This is used in a tibble and a function is mapped over all the different periodic samples, extracting periodic closing prices from bloomberg
+```{r,eval=FALSE}
+monthly <- c("periodicitySelection"="MONTHLY",
+           "periodicityAdjustment"="CALENDAR")
+quarterly <- c("periodicitySelection"="QUARTERLY",
+               "periodicityAdjustment"="CALENDAR")
+halfyearly <- c("periodicitySelection"="SEMI_ANNUALLY",
+                "periodicityAdjustment"="CALENDAR")
+yearly <- c("periodicitySelection"="YEARLY",
+              "periodicityAdjustment"="CALENDAR")
+daily <- c("periodicitySelection"="DAILY",
+            "periodicityAdjustment"="CALENDAR")
+close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,daily),
+       data = map(selection,function(selection){
+         bdh(securities = as.character(TickerNames15),
+             fields = "PX_LAST",
+             start.date=ymd("1995-01-01"),
+             options=selection)
+       }))
+```
+
+##Extracting daily fundamental data for each stock
+A tibble is created with a character vector with all the fundamental factors' names. A function is written that will extract daily data for each of these fundamentals in the tibble with the map function in R.
+```{r,eval=FALSE}
+fields <- tibble(fields = c("CUR_MKT_CAP",
+                            "BEST_PX_BPS_RATIO",
+                            "BEST_ROE",
+                            "EQY_DVD_YLD_12M",
+                            "LAST_CLOSE_TRR_1YR",
+                            "VOLATILITY_260D"))
+
+extract_daily <- function(df){
+  bdh(securities = as.character(TickerNames15),
+      fields = df,
+      start.date = ymd("19950101"))
+}
+
+Fundamental_Data <- fields %>%
+  mutate(Fund_Data = map(fields,extract_daily))
+```
+
+Macroeconomic factors will be extracted at a later stage. These will be used for the macroeconomic exposure model.
