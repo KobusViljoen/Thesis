@@ -1,0 +1,97 @@
+---
+title: "Stock selection for low Volatility portfolio"
+author: "Kobus Viljoen"
+date: "28 September 2016"
+output: html_document
+---
+```{r}
+knitr::opts_chunk$set(
+  eval = FALSE)
+```
+
+
+##Necessary packages
+```{r}
+library(broom)
+library(modelr)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+```
+
+##Grouping together the market cap and volatility values for each share
+
+```{r}
+# creating a function to group data according to their ticker for each fundamental
+Fund <- function(df){
+  df %>% bind_rows(.id="Ticker") %>%
+  group_by(Ticker)
+}
+
+# map the function over the fundamentals and create a new tibble, fundamental all named Fund_all
+Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
+
+Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest()
+
+# joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
+
+Fund_VOL <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest(),
+Fund_all %>% filter(fields == "VOLATILITY_260D") %>% select(FundData) %>% unnest()) %>%
+  group_by(Ticker) %>%
+  nest()
+```
+
+
+## Selecting the stocks for each rebalancing date (semi-annual dates)
+
+```{r}
+# The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
+# [[3]] is the data corresponding to semi-annual dates
+dates <- close_prices$data[[3]] %>% 
+  bind_rows(.id="Ticker") %>% 
+  group_by(date) %>% 
+  nest() %>% 
+  select(date)
+
+#First I need to select the corresponding MC and Volatility values for each share for each semi-annual date For the volatility model
+# This function will run through all the semi-annual dates with my tibble with volatility and MC data for each stock, selecting the corresponding data.
+selection <- function(df1){
+  all <- dates %>% mutate(sel = map(date,function(df){
+    sel <- df1 %>% filter(date == df)
+    tibble(date=sel$date , VOL = sel$VOLATILITY_260D,
+           Market_Cap = sel$CUR_MKT_CAP)
+  }))
+  all$sel %>% bind_rows()
+}
+
+# The output:
+VOL_model_Selection <- Fund_VOL %>% mutate(selection = map(data,selection))
+
+# Now i need to group the output according to the semi-annual dates.
+# Once this is done, i can select the stocks according to some specified rule (Low volatility in this case)
+
+VOL_Selection <- VOL_model_Selection$selection %>% 
+  bind_rows(.id="Ticker") %>%
+  mutate(Ticker = VOL_model_Selection$Ticker[as.numeric(Ticker)])
+
+VOL_Selection <- VOL_Selection %>% 
+  group_by(date) %>% 
+  arrange(date) %>% 
+  nest()
+
+stocks <- function(df){
+  df %>%
+    filter(!is.na(Market_Cap)) %>% 
+    filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
+    filter(!is.na(VOL)) %>%
+    filter(VOL < quantile(VOL,0.4))
+}
+
+VOL_Model <- VOL_Selection %>% mutate(stocks = map(data,stocks))
+# I still need to filter through the most liquid stocks based on trading volume and trading ratio
+```
+
