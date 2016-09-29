@@ -80,7 +80,7 @@ stocks <- function(df){
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
     filter(!is.na(Tot_Ret_1Y)) %>%
-    filter(Tot_Ret_1Y < quantile(Tot_Ret_1Y,0.5))
+    filter(Tot_Ret_1Y > quantile(Tot_Ret_1Y,0.5))
 }
 
 MOM_Model <- MOM_Selection %>% mutate(stocks = map(data,stocks))
