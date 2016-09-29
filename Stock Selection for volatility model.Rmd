@@ -93,3 +93,4 @@ VOL_Model <- VOL_Selection %>% mutate(stocks = map(data,stocks))
 # I still need to filter through the most liquid stocks based on trading volume and trading ratio
 ```
 
+Do I need to calculate Z-scores for the Volatility factor also, Will be quick to change as I already wrote a function to compute z-scores.
