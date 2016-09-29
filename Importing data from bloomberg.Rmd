@@ -22,7 +22,7 @@ library(Rblpapi)
 con <- blpConnect()
 ```
 
-An equity screen is done to extract all of the stocks listed on the JSE
+An equity screen is done to extract all of the stocks listed on the JSE All Share Index
 The screen's name is AllData, it also looks at the relevant fundamental factors of the stocks
 ```{r , eval=FALSE}
 eqs15 <- beqs(screenName = "AllData",date = ymd("20150101"))
@@ -46,7 +46,7 @@ close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,dail
        data = map(selection,function(selection){
          bdh(securities = as.character(TickerNames15),
              fields = "PX_LAST",
-             start.date=ymd("1995-01-01"),
+             start.date=ymd("1998-01-01"),
              options=selection)
        }))
 ```
@@ -55,16 +55,18 @@ close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,dail
 A tibble is created with a character vector with all the fundamental factors' names. A function is written that will extract daily data for each of these fundamentals in the tibble with the map function in R.
 ```{r,eval=FALSE}
 fields <- tibble(fields = c("CUR_MKT_CAP",
-                            "BEST_PX_BPS_RATIO",
-                            "BEST_ROE",
+                            "PX_LAST",
+                            "PX_TO_BOOK_RATIO",
+                            "RETURN_COM_EQY",
                             "EQY_DVD_YLD_12M",
-                            "LAST_CLOSE_TRR_1YR",
+                            "AVG_VOL",
                             "VOLATILITY_260D"))
 
 extract_daily <- function(df){
   bdh(securities = as.character(TickerNames15),
       fields = df,
-      start.date = ymd("19950101"))
+      start.date = ymd("19980101"),
+      options = daily)
 }
 
 Fundamental_Data <- fields %>%
