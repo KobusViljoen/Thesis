@@ -1,0 +1,15 @@
+---
+title: "Calculating stock weights"
+author: "Kobus Viljoen"
+date: "29 September 2016"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(
+  eval = FALSE)
+```
+
+In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
+I'm going to use the risk parity approach.
+At the ende of the stock selection process, I'm left with a tibble with the corresponding semi-annual rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
