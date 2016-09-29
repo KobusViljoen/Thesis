@@ -35,8 +35,6 @@ Fund <- function(df){
 # map the function over the fundamentals and create a new tibble, fundamental all named Fund_all
 Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
 
-Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest()
-
 # joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
 
 Fund_VOL <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest(),
