@@ -60,3 +60,16 @@ Closing <- MOM_Model %>%
   mutate(Returns = map2(stocks,date,Returns))
 ```
 
+## Market Cap weights for the momentum model
+```{r}
+MC_weights <- MOM_Model %>% mutate(MC_Weight = map(stocks,function(df){
+  df %>%
+    mutate(MC_Weight = Market_Cap/sum(Market_Cap)) %>%
+    select(c(Ticker,MC_Weight))
+}))
+
+```
+
+
+
+
