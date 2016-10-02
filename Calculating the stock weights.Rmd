@@ -12,7 +12,7 @@ knitr::opts_chunk$set(
 
 In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
 I'm going to use the risk parity approach.
-At the ende of the stock selection process, I'm left with a tibble with the corresponding semi-annual rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
+At the end of the stock selection process, I'm left with a tibble with the corresponding semi-annual rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
 
 ## Merging the selected stocks with their daily prices
 ```{r}
