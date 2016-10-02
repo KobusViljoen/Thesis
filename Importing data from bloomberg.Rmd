@@ -74,3 +74,4 @@ Fundamental_Data <- fields %>%
 ```
 
 Macroeconomic factors will be extracted at a later stage. These will be used for the macroeconomic exposure model.
+AVG_VOL did not import any data, would just have to use normal volume traded to check for liquidity.
