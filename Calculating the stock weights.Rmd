@@ -10,6 +10,19 @@ knitr::opts_chunk$set(
   eval = FALSE)
 ```
 
+##Necessary packages
+```{r}
+library(broom)
+library(modelr)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+```
+
 In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
 I'm going to use the risk parity approach.
 At the end of the stock selection process, I'm left with a tibble with the corresponding semi-annual rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
@@ -17,11 +30,26 @@ At the end of the stock selection process, I'm left with a tibble with the corre
 ## Merging the selected stocks with their daily prices
 ```{r}
 # close_price row number five consist out of the daily closing prices
-## This function takes the stocks list and date into account in collecting the daily data for each selected stock
-Prices <- function(df1,df2){
+# log returns are calculated using this function
+log_returns <- function(df){
+close <- df$"PX_LAST"
+date <- filter(df,date>date[1]) %>% select(date)
+ret <- tibble(date = date$date, log_ret = diff(log(close)))
+}
+
+logreturns <- close_prices$data[[5]] %>%
+  bind_rows(.id = "Ticker") %>%
+  group_by(Ticker) %>%
+  nest()
+
+logreturns <- logreturns %>% 
+  mutate(logret = map(data,log_returns))
+
+## This function takes the stocks list and dates from a specific model into account in collecting the daily return data for each selected stock
+Returns <- function(df1,df2){
   Tickers <- df1 %>% select(Ticker)
-  close_prices$data[[5]] %>% 
-    bind_rows(.id="Ticker") %>%
+  logreturns %>%
+    unnest(logret) %>%
     group_by(Ticker) %>%
     filter(Ticker %in% Tickers$Ticker) %>%
     filter(date <= df2) %>%
@@ -29,6 +57,6 @@ Prices <- function(df1,df2){
 }
 ## Example for the momentum model
 Closing <- MOM_Model %>% 
-  mutate(Prices = map2(stocks,date,Prices))
+  mutate(Returns = map2(stocks,date,Returns))
 ```
 
