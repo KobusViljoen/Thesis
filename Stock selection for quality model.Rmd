@@ -1,0 +1,91 @@
+---
+title: "Stock selection for Quality model"
+author: "Kobus Viljoen"
+date: "04 October 2016"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(
+  eval = FALSE)
+```
+
+##Necessary packages
+```{r}
+library(broom)
+library(modelr)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+```
+
+
+##Grouping together the market cap and ROE values for each share
+```{r}
+Fund <- function(df){
+  df %>% bind_rows(.id="Ticker") %>%
+  group_by(Ticker)
+}
+
+# map the function over the fundamentals and create a new tibble, fundamental all named Fund_all
+Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
+
+# joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
+Fund_QUALITY <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest(),
+ Fund_all %>% filter(fields == "RETURN_COM_EQY") %>% select(FundData) %>% unnest()) %>%
+   group_by(Ticker) %>%
+   nest()
+```
+
+
+## Selecting the stocks for each rebalancing date (semi-annual dates)
+```{r}
+# The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
+# [[3]] is the data corresponding to semi-annual dates
+# Company's Price to earnings ratios began to feature on the JSE in the 2000's
+dates <- close_prices$data[[3]] %>% 
+  bind_rows(.id="Ticker") %>% 
+  group_by(date) %>% 
+  nest() %>% 
+  filter(date >= date[7]) %>%
+  select(date)
+
+selection <- function(df1){
+  all <- dates %>% mutate(sel = map(date,function(df){
+    sel <- df1 %>% filter(date <= df) %>% filter(date >= df - years(1))
+    tibble(date = sel$date , 
+           PE_ROE = (sel$RETURN_COM_EQY - mean(sel$RETURN_COM_EQY,na.rm = T))/sd(sel$RETURN_COM_EQY,na.rm = T),
+           Market_Cap = sel$CUR_MKT_CAP) %>%
+      filter(date == df)
+    }))
+  all$sel %>% bind_rows()
+}
+
+# The output:
+QUALITY_model_Selection <- Fund_QUALITY %>% mutate(selection = map(data,selection))
+
+# Now i need to group the output according to the semi-annual dates.
+# Once this is done, i can select the stocks according to some specified rule (Low volatility in this case)
+QUALITY_Selection <- QUALITY_model_Selection$selection %>% 
+  bind_rows(.id="Ticker") %>%
+  mutate(Ticker = QUALITY_model_Selection$Ticker[as.numeric(Ticker)])
+
+QUALITY_Selection <- QUALITY_Selection %>% 
+  group_by(date) %>% 
+  arrange(date) %>% 
+  nest()
+
+stocks <- function(df){
+  df %>%
+    filter(!is.na(Market_Cap)) %>% 
+    filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
+    filter(!is.na(PE_ROE)) %>%
+    filter(PE_ROE > quantile(PE_ROE,0.5))
+}
+
+QUALITY_Model <- QUALITY_Selection %>% mutate(stocks = map(data,stocks))
+```
