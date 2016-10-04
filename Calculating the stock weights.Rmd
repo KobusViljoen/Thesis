@@ -59,9 +59,9 @@ Returns <- function(df1,df2){
     filter(date <= df2,date >= df2 - years(1)) %>%
     nest()
 }
-## Example for the momentum model
+## Example for the value model
 # This will be done for each model
-Closing <- MOM_Model %>% 
+Closing <- VALUE_Model %>% 
   mutate(returns = map2(stocks,date,Returns))
 
 ## Creating a matrix with all the returns for the selected stocks
@@ -77,9 +77,9 @@ Closing <- Closing %>%
 
 ```
 
-## Market Cap weights for the momentum model
+## Market Cap weights for the value model
 ```{r}
-MC_weights <- MOM_Model %>% mutate(MC_Weight = map(stocks,function(df){
+MC_weights <- VALUE_Model %>% mutate(MC_Weight = map(stocks,function(df){
   df %>%
     mutate(MC_Weight = Market_Cap/sum(Market_Cap)) %>%
     select(c(Ticker,MC_Weight))
@@ -179,9 +179,12 @@ RP_Ret <- Closing %>%
   mutate(RP_Ret = map_dbl(tot_ret,Sum_returns)) %>% 
   select(date,RP_Ret)
 
-# adding the cumulative return tibble to the RP_Ret_MOM model
-RP_Ret_MOM <- RP_Ret %>% 
+# adding the cumulative return tibble to the RP_Ret_VALUE model
+RP_Ret_VALUE <- RP_Ret %>% 
   mutate(RP_cum_ret = cumprod(RP_Ret+1))
+
+RP_Ret_VALUE$date <- RP_Ret_VALUE$date %>%
+  lead()
 
 
 ```
