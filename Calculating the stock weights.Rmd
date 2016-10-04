@@ -169,12 +169,13 @@ Tot_return <- function(df1,df2){
 # Mapping the function and adding a new list : tot_ret to the closing tibble
 Closing <- Closing %>% 
   mutate(tot_ret = map2(returns,dates,Tot_return))
+
 # get the total return for a six month period.
 Sum_returns <- function(df){
-  sum(df$ret)
+  sum(df$tot_ret)
 }
 #Mapping the sum_returns function over the total return list in the closing tibble
-RP_Ret_MOM <- Closing %>% 
+RP_Ret <- Closing %>% 
   mutate(RP_Ret = map_dbl(tot_ret,Sum_returns)) %>% 
   select(date,RP_Ret)
 
