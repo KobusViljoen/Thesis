@@ -21,6 +21,8 @@ library(tidyr)
 library(purrr)
 library(lubridate)
 library(tibble)
+library(plyr)
+
 ```
 
 In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
@@ -33,15 +35,17 @@ At the end of the stock selection process, I'm left with a tibble with the corre
 # log returns are calculated using this function
 log_returns <- function(df){
 close <- df$"PX_LAST"
-date <- filter(df,date>date[1]) %>% select(date)
+date <- dplyr::filter(df,date>date[1]) %>% select(date)
 ret <- tibble(date = date$date, log_ret = diff(log(close)))
 }
 
+# nesting the daily prices for each stock.
 logreturns <- close_prices$data[[5]] %>%
   bind_rows(.id = "Ticker") %>%
   group_by(Ticker) %>%
   nest()
 
+# Mapping the log returns function over each stock
 logreturns <- logreturns %>% 
   mutate(logret = map(data,log_returns))
 
@@ -52,12 +56,25 @@ Returns <- function(df1,df2){
     unnest(logret) %>%
     group_by(Ticker) %>%
     filter(Ticker %in% Tickers$Ticker) %>%
-    filter(date <= df2) %>%
+    filter(date <= df2,date >= df2 - years(1)) %>%
     nest()
 }
 ## Example for the momentum model
+# This will be done for each model
 Closing <- MOM_Model %>% 
-  mutate(Returns = map2(stocks,date,Returns))
+  mutate(returns = map2(stocks,date,Returns))
+
+## Creating a matrix with all the returns for the selected stocks
+Return_Matrix <- function(df){
+  joined_data <- df$data %>%
+  join_all(by = "date")
+  colnames(joined_data) <- c("date",df$Ticker)
+  joined_data
+}
+
+Closing <- Closing %>% 
+  mutate(ret_matrix = map(returns,Return_Matrix))
+
 ```
 
 ## Market Cap weights for the momentum model
@@ -67,6 +84,104 @@ MC_weights <- MOM_Model %>% mutate(MC_Weight = map(stocks,function(df){
     mutate(MC_Weight = Market_Cap/sum(Market_Cap)) %>%
     select(c(Ticker,MC_Weight))
 }))
+
+```
+
+
+## Risk parity weights
+```{r}
+# The Portfolio Analytics package is used in order to do the optimisation to estimate the risk parity weights. The risk proxy used is the expected shortfall
+#install.packages("DEoptim")
+#install.packages("ROI")
+#install.packages("timeSeries")
+#install_github("R-Finance/PortfolioAnalytics")
+#install_github("cran/ROI.plugin.glpk")
+#install_github("cran/ROI.plugin.quadprog")
+library(devtools)
+library(DEoptim)
+library(ROI)
+library(PortfolioAnalytics)
+require(ROI.plugin.glpk)
+require(ROI.plugin.quadprog)
+
+# This function runs the optimization in order to estimate the risp parity weights, given an xts object.
+RP_Weights <- function(df){
+returns <- df
+rownames(returns) <- returns[[1]]
+returns <- as.xts(returns[,2:length(colnames(returns))])
+stock_names <- colnames(returns)
+pspec <- portfolio.spec(assets = stock_names)
+pspec <- add.constraint(portfolio = pspec,
+                        type = "weight_sum",
+                        min_sum = 1,
+                        max_sum =1)
+pspec <- add.constraint(portfolio = pspec,
+                        type = "box",
+                        min = 0,
+                        max = 0.15)
+pspec <- add.objective(portfolio = pspec,
+                       type= "risk_budget",
+                       name = "ES",
+                       arguments = list(p=0.95),
+                       min_concentration = TRUE)
+opt <- optimize.portfolio(returns,
+                          pspec,
+                          optimize_method = "ROI",
+                          trace = TRUE)
+weights <- opt$weights
+}
+# Mapping the optimization function over all the periods
+Closing <- Closing %>% mutate(RP_weights = map(ret_matrix,RP_Weights))
+
+# The weights need to be merged with the returns list of tibbles.
+stock_weights <- function(df1,df2){
+  df2 %>% 
+    left_join(df1 %>% 
+                tibble(Ticker = c(Ticker = df2$Ticker),Weight = .))
+}
+Closing <- Closing %>% 
+  mutate(returns = map2(RP_weights,returns,stock_weights))
+```
+
+## The total return for each period
+```{r}
+# The log returns for each asset on the JALSH for each 6 month period
+SA_logreturns <- close_prices$data[[3]] %>%
+  bind_rows(.id = "Ticker") %>%
+  group_by(Ticker) %>%
+  nest()
+
+SA_logreturns <- SA_logreturns %>% mutate(logret = map(data,log_returns))
+
+# leading the dates one period forward in order to get the return achieved over a six month period when mapping the Tot_return function
+dates <- Closing$date %>% lead()
+
+# This function mutates the corresponding return for an asset over the next six months for all the assets selected in the model.
+Tot_return <- function(df1,df2){
+  Tickers <- df1$Ticker
+  b <- SA_logreturns %>%
+    unnest(logret) %>%
+    filter(date == df2,Ticker %in% Tickers) %>%
+    right_join(df1,by="Ticker") %>%
+    mutate(tot_ret = Weight*log_ret)
+}
+
+# Mapping the function and adding a new list : tot_ret to the closing tibble
+Closing <- Closing %>% 
+  mutate(tot_ret = map2(returns,dates,Tot_return))
+# get the total return for a six month period.
+Sum_returns <- function(df){
+  sum(df$ret)
+}
+#Mapping the sum_returns function over the total return list in the closing tibble
+RP_Ret_MOM <- Closing %>% 
+  mutate(RP_Ret = map_dbl(tot_ret,Sum_returns)) %>% 
+  select(date,RP_Ret)
+
+# adding the cumulative return tibble to the RP_Ret_MOM model
+RP_Ret_MOM <- RP_Ret %>% 
+  mutate(RP_cum_ret = cumprod(RP_Ret+1))
+
 
 ```
 
