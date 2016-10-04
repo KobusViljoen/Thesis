@@ -46,10 +46,12 @@ Fund_VALUE <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
 # [[3]] is the data corresponding to semi-annual dates
+# Company's Price to earnings ratios began to feature on the JSE in the 2000's
 dates <- close_prices$data[[3]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
   nest() %>% 
+  filter(date >= date[5]) %>%
   select(date)
 
 selection <- function(df1){
