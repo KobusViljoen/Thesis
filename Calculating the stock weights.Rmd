@@ -117,7 +117,7 @@ pspec <- add.constraint(portfolio = pspec,
                         max_sum =1)
 pspec <- add.constraint(portfolio = pspec,
                         type = "box",
-                        min = 0,
+                        min = 0.001,
                         max = 0.15)
 pspec <- add.objective(portfolio = pspec,
                        type= "risk_budget",
@@ -134,6 +134,7 @@ weights <- opt$weights
 Closing <- Closing %>% mutate(RP_weights = map(ret_matrix,RP_Weights))
 
 # The weights need to be merged with the returns list of tibbles.
+# This is done for the risk parity weights
 stock_weights <- function(df1,df2){
   df2 %>% 
     left_join(df1 %>% 
@@ -141,6 +142,10 @@ stock_weights <- function(df1,df2){
 }
 Closing <- Closing %>% 
   mutate(returns = map2(RP_weights,returns,stock_weights))
+
+
+# This is done for the Market Cap weights
+Closing <- Closing %>% mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
 ```
 
 ## The total return for each period
@@ -163,7 +168,7 @@ Tot_return <- function(df1,df2){
     unnest(logret) %>%
     filter(date == df2,Ticker %in% Tickers) %>%
     right_join(df1,by="Ticker") %>%
-    mutate(tot_ret = Weight*log_ret)
+    mutate(RP_tot_ret = Weight*log_ret, MC_tot_ret = MC_Weight*log_ret)
 }
 
 # Mapping the function and adding a new list : tot_ret to the closing tibble
@@ -171,17 +176,16 @@ Closing <- Closing %>%
   mutate(tot_ret = map2(returns,dates,Tot_return))
 
 # get the total return for a six month period.
-Sum_returns <- function(df){
-  sum(df$tot_ret)
-}
 #Mapping the sum_returns function over the total return list in the closing tibble
 RP_Ret <- Closing %>% 
-  mutate(RP_Ret = map_dbl(tot_ret,Sum_returns)) %>% 
-  select(date,RP_Ret)
+  mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret)),
+         MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret))) %>% 
+  select(date,RP_Ret,MC_Ret)
 
 # adding the cumulative return tibble to the RP_Ret_VALUE model
 RP_Ret_VALUE <- RP_Ret %>% 
-  mutate(RP_cum_ret = cumprod(RP_Ret+1))
+  mutate(RP_cum_ret = cumprod(RP_Ret+1) ,
+         MC_cum_ret = cumprod(MC_Ret+1))
 
 RP_Ret_VALUE$date <- RP_Ret_VALUE$date %>%
   lead()
