@@ -128,7 +128,7 @@ opt <- optimize.portfolio(returns,
                           pspec,
                           optimize_method = "ROI",
                           trace = TRUE)
-weights <- opt$weights
+RP_weights <- opt$weights
 }
 # Mapping the optimization function over all the periods
 Closing <- Closing %>% mutate(RP_weights = map(ret_matrix,RP_Weights))
@@ -138,7 +138,7 @@ Closing <- Closing %>% mutate(RP_weights = map(ret_matrix,RP_Weights))
 stock_weights <- function(df1,df2){
   df2 %>% 
     left_join(df1 %>% 
-                tibble(Ticker = c(Ticker = df2$Ticker),Weight = .))
+                tibble(Ticker = c(Ticker = df2$Ticker),RP_Weight = .),by = "Ticker")
 }
 Closing <- Closing %>% 
   mutate(returns = map2(RP_weights,returns,stock_weights))
@@ -168,7 +168,7 @@ Tot_return <- function(df1,df2){
     unnest(logret) %>%
     filter(date == df2,Ticker %in% Tickers) %>%
     right_join(df1,by="Ticker") %>%
-    mutate(RP_tot_ret = Weight*log_ret, MC_tot_ret = MC_Weight*log_ret)
+    mutate(RP_tot_ret = RP_Weight*log_ret, MC_tot_ret = MC_Weight*log_ret)
 }
 
 # Mapping the function and adding a new list : tot_ret to the closing tibble
