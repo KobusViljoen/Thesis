@@ -58,7 +58,7 @@ selection <- function(df1){
   all <- dates %>% mutate(sel = map(date,function(df){
     sel <- df1 %>% filter(date <= df) %>% filter(date >= df - years(1))
     tibble(date = sel$date , 
-           PE_ROE = (sel$RETURN_COM_EQY - mean(sel$RETURN_COM_EQY,na.rm = T))/sd(sel$RETURN_COM_EQY,na.rm = T),
+           ROE_Z = (sel$RETURN_COM_EQY - mean(sel$RETURN_COM_EQY,na.rm = T))/sd(sel$RETURN_COM_EQY,na.rm = T),
            Market_Cap = sel$CUR_MKT_CAP) %>%
       filter(date == df)
     }))
@@ -69,7 +69,7 @@ selection <- function(df1){
 QUALITY_model_Selection <- Fund_QUALITY %>% mutate(selection = map(data,selection))
 
 # Now i need to group the output according to the semi-annual dates.
-# Once this is done, i can select the stocks according to some specified rule (Low volatility in this case)
+# Once this is done, i can select the stocks according to some specified rule (High ROE score in this case)
 QUALITY_Selection <- QUALITY_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
   mutate(Ticker = QUALITY_model_Selection$Ticker[as.numeric(Ticker)])
@@ -83,8 +83,8 @@ stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(!is.na(PE_ROE)) %>%
-    filter(PE_ROE > quantile(PE_ROE,0.5))
+    filter(!is.na(ROE_Z)) %>%
+    filter(ROE_Z > quantile(PE_ROE,0.5))
 }
 
 QUALITY_Model <- QUALITY_Selection %>% mutate(stocks = map(data,stocks))
