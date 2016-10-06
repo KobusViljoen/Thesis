@@ -48,7 +48,8 @@ Fund_MOM <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(Fu
 dates <- close_prices$data[[3]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
-  nest() %>% 
+  nest() %>%
+  filter(date >= date[7]) %>%
   select(date)
 
 selection <- function(df1){
