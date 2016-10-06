@@ -71,17 +71,18 @@ MOM_Selection <- MOM_model_Selection$selection %>%
   bind_rows(.id="Ticker") %>%
   mutate(Ticker = MOM_model_Selection$Ticker[as.numeric(Ticker)])
 
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
 MOM_Selection <- MOM_Selection %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()
 
+# Filtering the top 50% of a factor (Factor Tilt)
 stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(!is.na(Tot_Ret_1Y)) %>%
-    filter(Tot_Ret_1Y > quantile(Tot_Ret_1Y,0.5))
+    filter(Tot_Ret_1Y > quantile(Tot_Ret_1Y,0.5, na.rm = T))
 }
 
 MOM_Model <- MOM_Selection %>% mutate(stocks = map(data,stocks))

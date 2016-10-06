@@ -76,17 +76,18 @@ VOL_Selection <- VOL_model_Selection$selection %>%
   bind_rows(.id="Ticker") %>%
   mutate(Ticker = VOL_model_Selection$Ticker[as.numeric(Ticker)])
 
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
 VOL_Selection <- VOL_Selection %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()
 
+# Filtering the top 50% of a factor (Factor Tilt)
 stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(!is.na(VOL)) %>%
-    filter(VOL < quantile(VOL,0.4))
+    filter(VOL < quantile(VOL,0.5,na.rm=T))
 }
 
 VOL_Model <- VOL_Selection %>% mutate(stocks = map(data,stocks))

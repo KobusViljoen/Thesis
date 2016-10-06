@@ -74,17 +74,19 @@ VALUE_Selection <- VALUE_model_Selection$selection %>%
   bind_rows(.id="Ticker") %>%
   mutate(Ticker = VALUE_model_Selection$Ticker[as.numeric(Ticker)])
 
+
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
 VALUE_Selection <- VALUE_Selection %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()
 
+# Filtering the top 50% of a factor (Factor Tilt)
 stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(!is.na(PE_Z)) %>%
-    filter(PE_Z < quantile(PE_Z,0.5))
+    filter(PE_Z < quantile(PE_Z,0.5,na.rm=T))
 }
 
 VALUE_Model <- VALUE_Selection %>% mutate(stocks = map(data,stocks))
