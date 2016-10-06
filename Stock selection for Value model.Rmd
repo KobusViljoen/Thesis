@@ -69,7 +69,7 @@ selection <- function(df1){
 VALUE_model_Selection <- Fund_VALUE %>% mutate(selection = map(data,selection))
 
 # Now i need to group the output according to the semi-annual dates.
-# Once this is done, i can select the stocks according to some specified rule (Low volatility in this case)
+# Once this is done, i can select the stocks according to some specified rule (Low Price to book in this case)
 VALUE_Selection <- VALUE_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
   mutate(Ticker = VALUE_model_Selection$Ticker[as.numeric(Ticker)])
@@ -84,7 +84,7 @@ stocks <- function(df){
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
     filter(!is.na(PE_Z)) %>%
-    filter(PE_Z > quantile(PE_Z,0.5))
+    filter(PE_Z < quantile(PE_Z,0.5))
 }
 
 VALUE_Model <- VALUE_Selection %>% mutate(stocks = map(data,stocks))
