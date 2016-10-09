@@ -59,7 +59,9 @@ fields <- tibble(fields = c("CUR_MKT_CAP",
                             "PX_TO_BOOK_RATIO",
                             "RETURN_COM_EQY",
                             "EQY_DVD_YLD_12M",
-                            "AVG_VOL",
+                            "GROSS_PROFIT",
+                            "EARN_YLD_HIST",
+                            "VOLATILITY_60D",
                             "VOLATILITY_260D"))
 
 extract_daily <- function(df){
@@ -72,6 +74,22 @@ extract_daily <- function(df){
 Fundamental_Data <- fields %>%
   mutate(Fund_Data = map(fields,extract_daily))
 ```
+
+```{r}
+OIL <- bdh("CL1 Comdty",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"))
+ZAR <- bdh("ZAR Curncy",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"))
+GOLD <- bdh("GC1 Comdty",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"))
+SWAP <- bdh("SASW10 Curncy",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"))
+```
+
 
 Macroeconomic factors will be extracted at a later stage. These will be used for the macroeconomic exposure model.
 AVG_VOL did not import any data, would just have to use normal volume traded to check for liquidity.
