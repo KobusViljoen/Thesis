@@ -59,9 +59,9 @@ Returns <- function(df1,df2){
     filter(date <= df2,date >= df2 - years(1)) %>%
     nest()
 }
-## Example for the value model
+## Example for the volatility model
 # This will be done for each model
-Closing <- VALUE_Model %>% 
+Closing <- VOL_Model %>% 
   mutate(returns = map2(stocks,date,Returns))
 
 ## Creating a matrix with all the returns for the selected stocks
@@ -77,9 +77,9 @@ Closing <- Closing %>%
 
 ```
 
-## Market Cap weights for the value model
+## Market Cap weights for the volatility model
 ```{r}
-MC_weights <- VALUE_Model %>% mutate(MC_Weight = map(stocks,function(df){
+MC_weights <- VOL_Model %>% mutate(MC_Weight = map(stocks,function(df){
   df %>%
     mutate(MC_Weight = Market_Cap/sum(Market_Cap)) %>%
     select(c(Ticker,MC_Weight))
@@ -117,7 +117,7 @@ pspec <- add.constraint(portfolio = pspec,
                         max_sum =1)
 pspec <- add.constraint(portfolio = pspec,
                         type = "box",
-                        min = 0.001,
+                        min = 0,
                         max = 0.15)
 pspec <- add.objective(portfolio = pspec,
                        type= "risk_budget",
@@ -148,10 +148,30 @@ Closing <- Closing %>%
 Closing <- Closing %>% mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
 ```
 
+## The risk of the 2 portfolios
+```{r}
+#the risk is calculated using the performance analylitics package
+risk <- function(df1,df2){
+  returns <- df1
+  rownames(returns) <- returns[[1]]
+  returns <- as.xts(returns[,2:length(colnames(returns))])
+  RP_weights <- df2$RP_Weight
+  MC_weights <- df2$MC_Weight
+  RP_SD <- PerformanceAnalytics::StdDev(R = returns %>% na.omit() ,weights = RP_weights)
+  MC_SD <- PerformanceAnalytics::StdDev(R = returns %>% na.omit() ,weights = MC_weights)
+  tibble(RP_SD = RP_SD[[1]],MC_SD = MC_SD[[1]])
+}
+
+risk <- Closing %>% mutate(risk = map2(ret_matrix,returns,risk))
+```
+
+
+
+
 ## The total return for each period
 ```{r}
-# The log returns for each asset on the JALSH for each 6 month period
-SA_logreturns <- close_prices$data[[3]] %>%
+# The log returns for each asset on the JALSH for each 3 month period
+SA_logreturns <- close_prices$data[[2]] %>%
   bind_rows(.id = "Ticker") %>%
   group_by(Ticker) %>%
   nest()
@@ -182,15 +202,16 @@ RP_Ret <- Closing %>%
          MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret))) %>% 
   select(date,RP_Ret,MC_Ret)
 
-# adding the cumulative return tibble to the RP_Ret_VALUE model
-RP_Ret_VALUE <- RP_Ret %>% 
+# adding the cumulative return tibble to the RP_Ret_VOL model
+RP_Ret_VOL <- RP_Ret %>% 
   mutate(RP_cum_ret = cumprod(RP_Ret+1) ,
          MC_cum_ret = cumprod(MC_Ret+1))
 
-RP_Ret_VALUE$date <- RP_Ret_VALUE$date %>%
+RP_Ret_VOL$date <- RP_Ret_VOL$date %>%
   lead()
 
-
+# Joining the return table with the SD for the RP portfolio and MC portfolio
+RP_Ret_VOL <- RP_Ret_VOL %>% left_join(risk %>% unnest(risk) %>% select(date,RP_SD,MC_SD))
 ```
 
 
