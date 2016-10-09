@@ -38,7 +38,7 @@ Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
 # joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
 
 Fund_VOL <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest(),
-Fund_all %>% filter(fields == "VOLATILITY_260D") %>% select(FundData) %>% unnest()) %>%
+Fund_all %>% filter(fields == "VOLATILITY_60D") %>% select(FundData) %>% unnest()) %>%
   group_by(Ticker) %>%
   nest()
 ```
@@ -49,10 +49,11 @@ Fund_all %>% filter(fields == "VOLATILITY_260D") %>% select(FundData) %>% unnest
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
 # [[3]] is the data corresponding to semi-annual dates
-dates <- close_prices$data[[3]] %>% 
+dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
-  nest() %>% 
+  nest() %>%
+  filter(date >= date[14]) %>%
   select(date)
 
 #First I need to select the corresponding MC and Volatility values for each share for each semi-annual date For the volatility model
@@ -60,7 +61,7 @@ dates <- close_prices$data[[3]] %>%
 selection <- function(df1){
   all <- dates %>% mutate(sel = map(date,function(df){
     sel <- df1 %>% filter(date == df)
-    tibble(date=sel$date , VOL = sel$VOLATILITY_260D,
+    tibble(date=sel$date , VOL = sel$VOLATILITY_60D,
            Market_Cap = sel$CUR_MKT_CAP)
   }))
   all$sel %>% bind_rows()

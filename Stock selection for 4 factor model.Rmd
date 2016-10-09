@@ -36,13 +36,13 @@ Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
 
 # joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
 MC <- Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest()
-PB <- Fund_all %>% filter(fields == "PX_TO_BOOK_RATIO") %>% select(FundData) %>% unnest()
+EY <- Fund_all %>% filter(fields == "EARN_YLD_HIST") %>% select(FundData) %>% unnest()
 PXLAST <- Fund_all %>% filter(fields == "PX_LAST") %>% select(FundData) %>% unnest()
-ROE <- Fund_all %>% filter(fields == "RETURN_COM_EQY") %>% select(FundData) %>% unnest()
+GP <- Fund_all %>% filter(fields == "GROSS_PROFIT") %>% select(FundData) %>% unnest()
 VOL <- Fund_all %>% filter(fields == "VOLATILITY_260D") %>% select(FundData) %>% unnest()
-Fund_4FACTOR <- left_join(MC,PB) %>% 
+Fund_4FACTOR <- left_join(MC,EY) %>% 
   left_join(PXLAST) %>% 
-  left_join(ROE) %>% 
+  left_join(GP) %>% 
   left_join(VOL) %>% 
   group_by(Ticker) %>% 
   nest()
@@ -53,22 +53,22 @@ Fund_4FACTOR <- left_join(MC,PB) %>%
 ## Selecting the stocks for each rebalancing date (semi-annual dates)
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
-# [[3]] is the data corresponding to semi-annual dates
+# [[2]] is the data corresponding to quarterly dates
 # Company's ROE ratios began to feature on the JSE in the 2000's
-dates <- close_prices$data[[3]] %>% 
+dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
   nest() %>% 
-  filter(date >= date[7]) %>%
+  filter(date >= date[14]) %>%
   select(date)
 
 selection <- function(df1){
   all <- dates %>% mutate(sel = map(date,function(df){
     sel <- df1 %>% filter(date <= df) %>% filter(date >= df - years(1))
     tibble(date = sel$date , 
-           PB_Z = (sel$PX_TO_BOOK_RATIO - mean(sel$PX_TO_BOOK_RATIO,na.rm = T))/sd(sel$PX_TO_BOOK_RATIO,na.rm = T),
+           EY_Z = (sel$EARN_YLD_HIST - mean(sel$EARN_YLD_HIST,na.rm = T))/sd(sel$EARN_YLD_HIST,na.rm = T),
            Tot_Ret = log(sel$PX_LAST) - log(sel$PX_LAST[1]),
-           ROE_Z = (sel$RETURN_COM_EQY - mean(sel$RETURN_COM_EQY,na.rm = T))/sd(sel$RETURN_COM_EQY,na.rm = T),
+           GP_Z = (sel$GROSS_PROFIT - mean(sel$GROSS_PROFIT,na.rm = T))/sd(sel$GROSS_PROFIT,na.rm = T),
            VOL = sel$VOLATILITY_260D,
            Market_Cap = sel$CUR_MKT_CAP) %>%
       filter(date == df)
@@ -96,9 +96,9 @@ stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(PB_Z < quantile(PB_Z,0.5,na.rm=TRUE) |
+    filter(EY_Z < quantile(EY_Z,0.5,na.rm=TRUE) |
              Tot_Ret > quantile(Tot_Ret,0.5,na.rm=TRUE) |
-             ROE_Z > quantile(ROE_Z,0.5,na.rm=TRUE) |
+             GP_Z > quantile(GP_Z,0.5,na.rm=TRUE) |
              VOL < quantile(VOL,0.5,na.rm=TRUE))
 }
 

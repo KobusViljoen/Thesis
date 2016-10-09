@@ -36,7 +36,7 @@ Fund_all <- Fundamental_Data %>% mutate(FundData = map(Fund_Data,Fund))
 
 # joining the market cap and volatility tibbles by date and ticker. Group by ticker and nest
 Fund_VALUE <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(FundData) %>% unnest(),
- Fund_all %>% filter(fields == "PX_TO_BOOK_RATIO") %>% select(FundData) %>% unnest()) %>%
+ Fund_all %>% filter(fields == "EARN_YLD_HIST") %>% select(FundData) %>% unnest()) %>%
    group_by(Ticker) %>%
    nest()
 ```
@@ -45,20 +45,20 @@ Fund_VALUE <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(
 ## Selecting the stocks for each rebalancing date (semi-annual dates)
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
-# [[3]] is the data corresponding to semi-annual dates
+# [[2]] is the data corresponding to quarterly dates
 # Company's Price to earnings ratios began to feature on the JSE in the 2000's
-dates <- close_prices$data[[3]] %>% 
+dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
   nest() %>% 
-  filter(date >= date[5]) %>%
+  filter(date >= date[14]) %>%
   select(date)
 
 selection <- function(df1){
   all <- dates %>% mutate(sel = map(date,function(df){
     sel <- df1 %>% filter(date <= df) %>% filter(date >= df - years(1))
     tibble(date = sel$date , 
-           PE_Z = (sel$PX_TO_BOOK_RATIO - mean(sel$PX_TO_BOOK_RATIO,na.rm = T))/sd(sel$PX_TO_BOOK_RATIO,na.rm = T),
+           EY_Z = (sel$EARN_YLD_HIST - mean(sel$EARN_YLD_HIST,na.rm = T))/sd(sel$EARN_YLD_HIST,na.rm = T),
            Market_Cap = sel$CUR_MKT_CAP) %>%
       filter(date == df)
     }))
@@ -86,7 +86,7 @@ stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 
     filter(Market_Cap > quantile(Market_Cap,0.05)) %>%
-    filter(PE_Z < quantile(PE_Z,0.5,na.rm=T))
+    filter(EY_Z > quantile(EY_Z,0.5,na.rm=T))
 }
 
 VALUE_Model <- VALUE_Selection %>% mutate(stocks = map(data,stocks))
