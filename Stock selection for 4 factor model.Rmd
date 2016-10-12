@@ -24,7 +24,7 @@ library(tibble)
 ```
 
 
-##Grouping together the market cap and PE values for each share
+##Grouping together the market cap and other 4 factor's values for each share
 ```{r}
 Fund <- function(df){
   df %>% bind_rows(.id="Ticker") %>%
@@ -50,7 +50,7 @@ Fund_4FACTOR <- left_join(MC,EY) %>%
 ```
 
 
-## Selecting the stocks for each rebalancing date (semi-annual dates)
+## Selecting the stocks for each rebalancing date (quarterly dates)
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
