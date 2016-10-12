@@ -41,7 +41,7 @@ Fund_MOM <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(Fu
 ```
 
 
-## Selecting the stocks for each rebalancing date (semi-annual dates)
+## Selecting the stocks for each rebalancing date (quarterly dates)
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
