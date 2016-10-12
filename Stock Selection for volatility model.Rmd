@@ -44,7 +44,7 @@ Fund_all %>% filter(fields == "VOLATILITY_60D") %>% select(FundData) %>% unnest(
 ```
 
 
-## Selecting the stocks for each rebalancing date (semi-annual dates)
+## Selecting the stocks for each rebalancing date (quarterly dates)
 
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
