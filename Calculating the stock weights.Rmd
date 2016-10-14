@@ -147,7 +147,7 @@ Closing <- Closing %>%
   mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
 ```
 
-## The risk of the 2 portfolios
+## The risk of the 2 portfolios (market cap and risk parity weighted)
 ```{r}
 #the risk is calculated using the performance analylitics package
 risk <- function(df1,df2){
