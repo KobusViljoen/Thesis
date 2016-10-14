@@ -1,0 +1,139 @@
+---
+title: "Macro-Economic Exposure"
+author: "Kobus Viljoen"
+date: "14 October 2016"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(
+  eval = FALSE)
+```
+
+## Necessary packages
+```{r}
+library(quantmod)
+library(broom)
+library(modelr)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(lubridate)
+```
+
+## Calculating weekly log returns for all the shares and macro factors
+This will be done for all the shares so that, with the stock selection process, i could just filter the necessary stocks and their exposure for a given rebalncing date.
+```{r}
+## exclude NA's due to OIL and GOLD being american data, some dates may be missing
+options(na.action = na.exclude)
+## daily per share date for fitting macro model for each share
+per_share <- close_prices$data[[6]] %>% 
+  bind_rows(.id="Ticker") %>% 
+  group_by(Ticker) %>% 
+  nest()
+
+## Calculates Daily log Return and put into Tibble
+log_returns <- function(df){
+  close <- df$"PX_LAST"
+  date <- filter(df,date>date[1]) %>% select(date)
+  ret <- tibble(date = date$date, log_ret = diff(log(close)))
+}
+## Calculate macroeconomic changes
+ZAR_change <- log_returns(ZAR_weekly) %>% dplyr::rename(ZAR_Change = log_ret)
+Oil_change <- log_returns(OIL_weekly) %>% dplyr::rename(OIL_Change = log_ret)
+GOLD_change <- log_returns(GOLD_weekly) %>% dplyr::rename(GOLD_Change = log_ret)
+SWAP_change <- log_returns(SWAP_weekly) %>% dplyr::rename(SWAP_Change = log_ret)
+############## Need to get data for 10y bond and also CPI
+
+### This function is created twice due to the macro factors added in the second one.
+log_returns <- function(df){
+  close <- df$"PX_LAST"
+  date <- filter(df,date>date[1]) %>% select(date)
+  ret <- tibble(date = date$date, log_ret = diff(log(close))) %>%
+    merge(ZAR_change) %>%
+    merge(Oil_change) %>%
+    merge(GOLD_change) %>%
+    merge(SWAP_change)
+}
+
+## add weekly log returns to the weekly per_share data and also the weekly the change in macro factors
+## The macro factors are added for each share, it is easier to do a regression that way.
+## i know that the dates match
+per_share <- per_share %>% mutate(ret = map(data,log_returns))
+```
+
+## Grouping the data according to the rebalancing dates
+A tibble with the rebalancing dates are created at first.
+Yearly data for each stock, up to a rebalncing date, are put into the next column as a list of tibbles
+```{r}
+dates <- close_prices$data[[2]] %>% 
+  bind_rows(.id="Ticker") %>% 
+  group_by(date) %>% 
+  nest() %>%
+  filter(date >= date[14]) %>%
+  select(date)
+
+# Creating a tibble with the rebalancing dates
+macro_per_share <- tibble(dates = dates$date)
+
+# Getting the data for each stock for the past year for the corresponding date
+collect_data <- function(df){
+  per_share %>% 
+    unnest(ret) %>%
+    filter(date <= df,date >= df - years(1)) %>%
+    group_by(Ticker) %>%
+    nest()
+}
+
+macro_per_share <- macro_per_share %>% 
+  mutate(data = map(dates,collect_data))
+```
+
+## Calculating the macro exposure of each stock
+This is based on a time series regression over the past 52 weeks
+4 linear regression functions are written, in order to make the macro factors uncorrelated with each other.
+
+```{r}
+macro_exposure <- function(df){
+  macro_model <- function(df){
+    lm(OIL_Change ~ ZAR_Change, data = df)
+  }
+  
+  macro1 <- df %>% mutate(model = map(data,macro_model))
+  macro1 <- macro1 %>% mutate(resids = map2(data,model,add_residuals))
+  
+  macro1 <- macro1 %>% unnest(resids) %>% dplyr::rename(OIL = resid) %>% group_by(Ticker) %>% nest()
+  
+  
+  macro_model <- function(df){
+    lm(GOLD_Change ~ ZAR_Change + OIL, data = df)
+  }
+  macro2 <- macro1 %>% mutate(model = map(data,macro_model))
+  macro2 <- macro2 %>% mutate(resids = map2(data,model,add_residuals))
+  
+  macro2 <- macro2 %>% unnest(resids) %>% dplyr::rename(GOLD = resid) %>% group_by(Ticker) %>% nest()
+  
+  macro_model <- function(df){
+    lm(SWAP_Change ~ ZAR_Change + OIL + GOLD, data = df)
+  }
+  macro3 <- macro2 %>% mutate(model = map(data,macro_model))
+  macro3 <- macro3 %>% mutate(resids = map2(data,model,add_residuals))
+  
+  macro3 <- macro3 %>% unnest(resids) %>% dplyr::rename(SWAP = resid) %>% group_by(Ticker) %>% nest()
+  
+  
+  macro_model <- function(df){
+    lm(log_ret ~ ZAR_Change + OIL + GOLD + SWAP , data = df)
+  }
+  
+  macro_final <- macro3 %>% mutate(model = map(data,macro_model))
+  macro_final <- macro_final %>% mutate(resids = map2(data,model,add_residuals))
+  
+  
+}
+# This function of linear regression functions are mapped over all the rebalancing dates and over all the stocks, given their yearly data up to that specific date
+exposure_per_reb_date <- macro_per_share %>% mutate(exposure = map(data,macro_exposure))
+```
+
