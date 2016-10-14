@@ -27,7 +27,7 @@ library(plyr)
 
 In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
 I'm going to use the risk parity approach.
-At the end of the stock selection process, I'm left with a tibble with the corresponding semi-annual rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
+At the end of the stock selection process, I'm left with a tibble with the corresponding quarterly rebalancing dates in a vector and then a list of tibbles with the selected stocks corresponding to the dates.
 
 ## Merging the selected stocks with their daily log returns
 ```{r}
@@ -43,13 +43,12 @@ ret <- tibble(date = date$date, log_ret = diff(log(close)))
 logreturns <- close_prices$data[[5]] %>%
   bind_rows(.id = "Ticker") %>%
   group_by(Ticker) %>%
-  nest()
+  nest() %>%
+  mutate(logret = map(data,log_returns))  # Mapping the log returns function over each stock's daily close prices
 
-# Mapping the log returns function over each stock
-logreturns <- logreturns %>% 
-  mutate(logret = map(data,log_returns))
 
-## This function takes the stocks list and dates from a specific model into account in collecting the daily return data for each selected stock
+## This function takes the stocks list and dates from a specific model into account in collecting the daily return data for each selected stock for the past year.
+# The reason for doing this, is to calculate the risk parity weights, calculating variance/covariance matrix.
 Returns <- function(df1,df2){
   Tickers <- df1 %>% select(Ticker)
   logreturns %>%
@@ -64,10 +63,10 @@ Returns <- function(df1,df2){
 Closing <- VOL_Model %>% 
   mutate(returns = map2(stocks,date,Returns))
 
-## Creating a matrix with all the returns for the selected stocks
+## Creating a matrix with all the returns for the selected stocks.
 Return_Matrix <- function(df){
   joined_data <- df$data %>%
-  join_all(by = "date")
+  join_all(by = "date") # Comes from the plyr package
   colnames(joined_data) <- c("date",df$Ticker)
   joined_data
 }
@@ -91,6 +90,7 @@ MC_weights <- VOL_Model %>% mutate(MC_Weight = map(stocks,function(df){
 ## Risk parity weights
 ```{r}
 # The Portfolio Analytics package is used in order to do the optimisation to estimate the risk parity weights. The risk proxy used is the expected shortfall
+# Further investigation will be put into the risk proxy
 #install.packages("DEoptim")
 #install.packages("ROI")
 #install.packages("timeSeries")
@@ -140,12 +140,11 @@ stock_weights <- function(df1,df2){
     left_join(df1 %>% 
                 tibble(Ticker = c(Ticker = df2$Ticker),RP_Weight = .),by = "Ticker")
 }
+
+## adding the RP and MC weights 
 Closing <- Closing %>% 
-  mutate(returns = map2(RP_weights,returns,stock_weights))
-
-
-# This is done for the Market Cap weights
-Closing <- Closing %>% mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
+  mutate(returns = map2(RP_weights,returns,stock_weights)) %>%
+  mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
 ```
 
 ## The risk of the 2 portfolios
@@ -163,28 +162,47 @@ risk <- function(df1,df2){
 }
 
 risk <- Closing %>% mutate(risk = map2(ret_matrix,returns,risk))
+
+## need to move the dates one period forward in order to merge them with the cumulative returns.
+## The dates are moved one space forward when calculating c portfolio returns
+## the reason for this is, that the weights calculated at a certain time need to be multiplied with the returns over the period that follows.
+risk$date <- risk$date %>% lead()
+risk <- risk %>% na.omit()
 ```
 
-
+## Calculating the benchmark's performance
+```{r}
+dates <- Closing$date
+JALSH_returns <- JALSH %>% 
+  filter(date %in% dates) %>% 
+  mutate(JSE_log_ret = c(0,diff(log(PX_LAST)))) %>%
+  mutate(JSE_cum_ret = cumprod(1+JSE_log_ret))
+```
 
 
 ## The total return for each period
 ```{r}
 # The log returns for each asset on the JALSH for each 3 month period
-SA_logreturns <- close_prices$data[[2]] %>%
+Quarter_logreturns <- close_prices$data[[2]] %>%
   bind_rows(.id = "Ticker") %>%
   group_by(Ticker) %>%
   nest()
 
-SA_logreturns <- SA_logreturns %>% mutate(logret = map(data,log_returns))
+log_returns2 <- function(df){
+close <- df$"PX_LAST"
+date <- dplyr::filter(df,date >= date[1]) %>% select(date)
+ret <- tibble(date = date$date, log_ret = c(0,diff(log(close))))
+}
 
-# leading the dates one period forward in order to get the return achieved over a six month period when mapping the Tot_return function
+Quarter_logreturns <- Quarter_logreturns %>% mutate(logret = map(data,log_returns2))
+
+# leading the dates one period forward in order to get the return achieved over a 3 month period when mapping the Tot_return function
 dates <- Closing$date %>% lead()
 
-# This function mutates the corresponding return for an asset over the next six months for all the assets selected in the model.
+# This function mutates the corresponding return for an asset over the next 3 months with all the assets selected in the model.
 Tot_return <- function(df1,df2){
   Tickers <- df1$Ticker
-  b <- SA_logreturns %>%
+  b <- Quarter_logreturns %>%
     unnest(logret) %>%
     filter(date == df2,Ticker %in% Tickers) %>%
     right_join(df1,by="Ticker") %>%
@@ -192,28 +210,80 @@ Tot_return <- function(df1,df2){
 }
 
 # Mapping the function and adding a new list : tot_ret to the closing tibble
+# The output, a tibble with all the slected stocks with their corresponding weights and 3 month log returns and total returns (weight*return)
 Closing <- Closing %>% 
   mutate(tot_ret = map2(returns,dates,Tot_return))
 
-# get the total return for a six month period.
-#Mapping the sum_returns function over the total return list in the closing tibble
+# get the total return for a 3 month period.
+#Mapping a sum_returns function over the total return list in the closing tibble
 RP_Ret <- Closing %>% 
   mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret)),
          MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret))) %>% 
   select(date,RP_Ret,MC_Ret)
 
 # adding the cumulative return tibble to the RP_Ret_VOL model
+# Joining the return table with the SD for the RP portfolio and MC portfolio
 RP_Ret_VOL <- RP_Ret %>% 
   mutate(RP_cum_ret = cumprod(RP_Ret+1) ,
          MC_cum_ret = cumprod(MC_Ret+1))
-
+  
 RP_Ret_VOL$date <- RP_Ret_VOL$date %>%
   lead()
+# This tibble gives a summary of the performance up to a specific date.
 
-# Joining the return table with the SD for the RP portfolio and MC portfolio
-RP_Ret_VOL <- RP_Ret_VOL %>% left_join(risk %>% unnest(risk) %>% select(date,RP_SD,MC_SD))
+# Adding the benchmark's performance.
+# In this case only the JSE All Share index is used, since it had data from before 2001.
+# If another benchmark need to be added, the starting date needs to be changed since I compare cumulative returns
+RP_Ret_VOL <- RP_Ret_VOL %>% 
+  left_join(risk %>% unnest(risk) %>% select(date,RP_SD,MC_SD),by="date") %>%
+  left_join(JALSH_returns,by = "date") %>% 
+  select(-PX_LAST)
+```
+
+## Combining the macro expsoure of the selected stocks with the tibble containing stock weights
+Make sure that the macroeconomic file was executed before the following chunks
+```{r}
+# A loop is run over all the rebalancing dates in the outer_combine function
+# In the inner map function, the macro exposures are combined with their corresponding shares for the specific date.
+outer_combine <- function(df,df1){
+  exposure <- exposure_per_reb_date %>% 
+    filter(dates == df) %>%
+    select(exposure)
+  df1 %>%
+    mutate(macro_exp = map(Ticker,function(df1){
+    ticker <- df1
+    model <- exposure$exposure[[1]] %>% filter(Ticker == ticker[[1]])
+    macroexp <- tibble(ZAR = model$model[[1]]$coefficients[["ZAR_Change"]],
+                       OIL = model$model[[1]]$coefficients[["OIL"]],
+                       GOLD = model$model[[1]]$coefficients[["GOLD"]],
+                       SWAP = model$model[[1]]$coefficients[["SWAP"]])
+  }))
+}
+Macro <- Closing %>% 
+  mutate(macro_exp = map2(date,returns,outer_combine)) %>%
+  select(date,macro_exp)
+
+#The output can be compared to the specific model's output, to check if all the stocks are included and all their macro exposures are linked up
+Macro <- Macro %>% 
+  mutate(macro_exp = map(macro_exp,function(df) df %>% unnest(macro_exp)))
+
 ```
 
 
+## Calculating the total macro exposure of the portfolio for a specific month
+```{r}
+Tot_macro <- function(df){
+  exp <- tibble(ZAR = df$RP_Weight*df$ZAR,
+                OIL = df$RP_Weight*df$OIL,
+                GOLD = df$RP_Weight*df$GOLD,
+                SWAP = df$RP_Weight*df$SWAP)
+  tot_exposure <- tibble(ZAR = sum(exp$ZAR),
+                         OIL = sum(exp$OIL),
+                         GOLD = sum(exp$GOLD),
+                         SWAP = sum(exp$SWAP))
+}
+Total_exposure <- Macro %>% mutate(tot_exp = map(macro_exp,Tot_macro))
+Total_exposure <- Total_exposure %>% unnest(tot_exp)
+```
 
 

@@ -23,7 +23,8 @@ con <- blpConnect()
 ```
 
 An equity screen is done to extract all of the stocks listed on the JSE All Share Index
-The screen's name is AllData, it also looks at the relevant fundamental factors of the stocks
+The screen's name is AllData, it also looks at the relevant fundamental factors of the stocks.
+This was also done as a test, to see if I could do an equity screen from inside R.
 ```{r , eval=FALSE}
 eqs15 <- beqs(screenName = "AllData",date = ymd("20150101"))
 TickerNames15 <- eqs15$Ticker
@@ -42,7 +43,9 @@ yearly <- c("periodicitySelection"="YEARLY",
               "periodicityAdjustment"="CALENDAR")
 daily <- c("periodicitySelection"="DAILY",
             "periodicityAdjustment"="CALENDAR")
-close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,daily),
+weekly <- c("periodicitySelection"="WEEKLY",
+            "periodicityAdjustment"="CALENDAR")
+close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,daily,weekly),
        data = map(selection,function(selection){
          bdh(securities = as.character(TickerNames15),
              fields = "PX_LAST",
@@ -75,21 +78,64 @@ Fundamental_Data <- fields %>%
   mutate(Fund_Data = map(fields,extract_daily))
 ```
 
+## Daily and weekly data of macroeconomic data
 ```{r}
-OIL <- bdh("CL1 Comdty",
+OIL_daily <- bdh("CL1 Comdty",
            fields = "PX_LAST",
            start.date = ymd("19980101"))
-ZAR <- bdh("ZAR Curncy",
+ZAR_daily <- bdh("ZAR Curncy",
            fields = "PX_LAST",
            start.date = ymd("19980101"))
-GOLD <- bdh("GC1 Comdty",
+GOLD_daily <- bdh("GC1 Comdty",
            fields = "PX_LAST",
            start.date = ymd("19980101"))
-SWAP <- bdh("SASW10 Curncy",
+SWAP_daily <- bdh("SASW10 Curncy",
            fields = "PX_LAST",
            start.date = ymd("19980101"))
+SA_Bond_daily <- bdh("GSAB10YR Index",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = daily)
+
+
+OIL_weekly <- bdh("CL1 Comdty",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+ZAR_weekly <- bdh("ZAR Curncy",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+GOLD_weekly <- bdh("GC1 Comdty",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+SWAP_weekly <- bdh("SASW10 Curncy",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+GDP_weekly <- bdh("SACGDP Index",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+SA_Bond_weekly <- bdh("GSAB10YR Index",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = weekly)
+```
+
+## benchmark performances
+```{r}
+# The JASLH and SWIX are extracted now, further attention will be given to the correct benchmark.
+JALSH <- bdh("JALSH Index",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = daily)
+SWIX <- bdh("STXSWX SJ Equity",
+           fields = "PX_LAST",
+           start.date = ymd("19980101"),
+           options = daily)
 ```
 
 
-Macroeconomic factors will be extracted at a later stage. These will be used for the macroeconomic exposure model.
-AVG_VOL did not import any data, would just have to use normal volume traded to check for liquidity.
+

@@ -26,6 +26,7 @@ library(tibble)
 
 ##Grouping together the market cap and Gross Profit values for each share
 ```{r}
+# creating a function to group data according to their ticker for each fundamental
 Fund <- function(df){
   df %>% bind_rows(.id="Ticker") %>%
   group_by(Ticker)
@@ -42,11 +43,12 @@ Fund_QUALITY <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% selec
 ```
 
 
-## Selecting the stocks for each rebalancing date (quarterly)
+## Selecting the stocks for each rebalancing date (quarterly dates)
 ```{r}
-# The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
+# The quarterly dates are extracted from the quarterly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
 # Company's Price to earnings ratios began to feature on the JSE in the 2000's
+# date[14] corresponds to the rebancing date in June 2001.
 dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
@@ -68,17 +70,16 @@ selection <- function(df1){
 # The output:
 QUALITY_model_Selection <- Fund_QUALITY %>% mutate(selection = map(data,selection))
 
-# Now i need to group the output according to the semi-annual dates.
-# Once this is done, i can select the stocks according to some specified rule (High ROE score in this case)
+# Now i need to group the output according to the quarterly dates.
+# Once this is done, i can select the stocks according to some specified rule (high Gross Profit in this case)
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbles containing each share's info corresponding to that specific date.
 QUALITY_Selection <- QUALITY_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
-  mutate(Ticker = QUALITY_model_Selection$Ticker[as.numeric(Ticker)])
-
-# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
-QUALITY_Selection <- QUALITY_Selection %>% 
+  mutate(Ticker = QUALITY_model_Selection$Ticker[as.numeric(Ticker)]) %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()
+
 
 # Filtering the top 50% of a factor (Factor Tilt)
 stocks <- function(df){

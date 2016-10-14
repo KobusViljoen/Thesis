@@ -9,7 +9,6 @@ knitr::opts_chunk$set(
   eval = FALSE)
 ```
 
-
 ##Necessary packages
 ```{r}
 library(broom)
@@ -48,7 +47,8 @@ Fund_all %>% filter(fields == "VOLATILITY_60D") %>% select(FundData) %>% unnest(
 
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
-# [[3]] is the data corresponding to semi-annual dates
+# [[2]] is the data corresponding to quarterly dates
+# date[14] corresponds to the rebancing date in June 2001.
 dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
@@ -56,8 +56,7 @@ dates <- close_prices$data[[2]] %>%
   filter(date >= date[14]) %>%
   select(date)
 
-#First I need to select the corresponding MC and Volatility values for each share for each semi-annual date For the volatility model
-# This function will run through all the semi-annual dates with my tibble with volatility and MC data for each stock, selecting the corresponding data.
+#This function will run through all the semi-annual dates, selecting the corresponding fundamental data.
 selection <- function(df1){
   all <- dates %>% mutate(sel = map(date,function(df){
     sel <- df1 %>% filter(date == df)
@@ -68,22 +67,20 @@ selection <- function(df1){
 }
 
 # The output:
+# A tibble with all the shares in the first column, in the selection column: the share's fundamental value for each rebalancing date
 VOL_model_Selection <- Fund_VOL %>% mutate(selection = map(data,selection))
 
-# Now i need to group the output according to the semi-annual dates.
+# Now i need to group the output according to the quarterly dates.
 # Once this is done, i can select the stocks according to some specified rule (Low volatility in this case)
-
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbles containing each share's info corresponding to that specific date.
 VOL_Selection <- VOL_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
-  mutate(Ticker = VOL_model_Selection$Ticker[as.numeric(Ticker)])
-
-# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
-VOL_Selection <- VOL_Selection %>% 
-  group_by(date) %>% 
-  arrange(date) %>% 
+  mutate(Ticker = VOL_model_Selection$Ticker[as.numeric(Ticker)]) %>%
+  group_by(date) %>%
+  arrange(date) %>%
   nest()
 
-# Filtering the top 50% of a factor (Factor Tilt)
+# Filtering the top 50% of a factor (Factor Tilt) for each rebalancing date.
 stocks <- function(df){
   df %>%
     filter(!is.na(Market_Cap)) %>% 

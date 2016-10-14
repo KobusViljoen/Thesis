@@ -25,6 +25,7 @@ library(tibble)
 
 ##Grouping together the market cap and volatility values for each share
 ```{r}
+# creating a function to group data according to their ticker for each fundamental
 Fund <- function(df){
   df %>% bind_rows(.id="Ticker") %>%
   group_by(Ticker)
@@ -43,8 +44,9 @@ Fund_MOM <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(Fu
 
 ## Selecting the stocks for each rebalancing date (quarterly dates)
 ```{r}
-# The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
+# The quarterly dates are extracted from the quarterly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
+# date[14] corresponds to the rebancing date in June 2001.
 dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
@@ -67,12 +69,10 @@ MOM_model_Selection <- Fund_MOM %>% mutate(selection = map(data,selection))
 
 # Now i need to group the output according to the semi-annual dates.
 # Once this is done, i can select the stocks according to some specified rule (High Momentum in this case)
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbles containing each share's info corresponding to that specific date.
 MOM_Selection <- MOM_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
-  mutate(Ticker = MOM_model_Selection$Ticker[as.numeric(Ticker)])
-
-# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
-MOM_Selection <- MOM_Selection %>% 
+  mutate(Ticker = MOM_model_Selection$Ticker[as.numeric(Ticker)]) %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()

@@ -24,8 +24,9 @@ library(tibble)
 ```
 
 
-##Grouping together the market cap and Earnings yield values for each share
+##Grouping together the market cap and earnings yield values for each share
 ```{r}
+# creating a function to group data according to their ticker for each fundamental
 Fund <- function(df){
   df %>% bind_rows(.id="Ticker") %>%
   group_by(Ticker)
@@ -44,9 +45,10 @@ Fund_VALUE <- left_join(Fund_all %>% filter(fields == "CUR_MKT_CAP") %>% select(
 
 ## Selecting the stocks for each rebalancing date (quarterly dates)
 ```{r}
-# The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
+# The quarterly dates are extracted from the quarterly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
 # Company's Price to earnings ratios began to feature on the JSE in the 2000's
+# date[14] corresponds to the rebancing date in June 2001.
 dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
@@ -66,17 +68,15 @@ selection <- function(df1){
 }
 
 # The output:
+# A tibble with all the shares in the first column, in the selection column: the share's fundamental value for each rebalancing date
 VALUE_model_Selection <- Fund_VALUE %>% mutate(selection = map(data,selection))
 
-# Now i need to group the output according to the semi-annual dates.
-# Once this is done, i can select the stocks according to some specified rule (Low Price to book in this case)
+# Now i need to group the output according to the quarterly dates.
+# Once this is done, i can select the stocks according to some specified rule (High earnings yield in this case)
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbles containing each share's info corresponding to that specific date.
 VALUE_Selection <- VALUE_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
-  mutate(Ticker = VALUE_model_Selection$Ticker[as.numeric(Ticker)])
-
-
-# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
-VALUE_Selection <- VALUE_Selection %>% 
+  mutate(Ticker = VALUE_model_Selection$Ticker[as.numeric(Ticker)]) %>%
   group_by(date) %>% 
   arrange(date) %>% 
   nest()

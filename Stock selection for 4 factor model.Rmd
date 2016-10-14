@@ -24,8 +24,9 @@ library(tibble)
 ```
 
 
-##Grouping together the market cap and other 4 factor's values for each share
+##Grouping together the market cap and fundamental values for each share
 ```{r}
+# creating a function to group data according to their ticker for each fundamental
 Fund <- function(df){
   df %>% bind_rows(.id="Ticker") %>%
   group_by(Ticker)
@@ -54,7 +55,8 @@ Fund_4FACTOR <- left_join(MC,EY) %>%
 ```{r}
 # The semi annual dates are extracted from the halfyearly price data that was extracted from bloomberg
 # [[2]] is the data corresponding to quarterly dates
-# Company's ROE ratios began to feature on the JSE in the 2000's
+# Company's gross profit and earnings yield ratios began to feature on the JSE in the 2000's
+# date[14] corresponds to the rebancing date in June 2001.
 dates <- close_prices$data[[2]] %>% 
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
@@ -81,15 +83,14 @@ ALL_FACTOR_model_Selection <- Fund_4FACTOR %>% mutate(selection = map(data,selec
 
 # Now i need to group the output according to the semi-annual dates.
 # Once this is done, i can select the stocks according to some specified rule (4 factor model in this case)
+# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbles containing each share's info corresponding to that specific date.
 ALL_FACTOR_Selection <- ALL_FACTOR_model_Selection$selection %>% 
   bind_rows(.id="Ticker") %>%
-  mutate(Ticker = ALL_FACTOR_model_Selection$Ticker[as.numeric(Ticker)])
-
-# The result is a tibble with the first column, the rebalancing dates. The second column is a list of tibbled containing each share's info corresponding to that specific date.
-ALL_FACTOR_Selection <- ALL_FACTOR_Selection %>% 
+  mutate(Ticker = ALL_FACTOR_model_Selection$Ticker[as.numeric(Ticker)]) %>% 
   group_by(date) %>% 
   arrange(date) %>% 
   nest()
+
 
 # Filtering the top 50% of a factor (Factor Tilt)
 stocks <- function(df){
