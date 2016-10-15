@@ -253,7 +253,8 @@ outer_combine <- function(df,df1){
     mutate(macro_exp = map(Ticker,function(df1){
     ticker <- df1
     model <- exposure$exposure[[1]] %>% filter(Ticker == ticker[[1]])
-    macroexp <- tibble(ZAR = model$model[[1]]$coefficients[["ZAR_Change"]],
+    macroexp <- tibble(Alpha = model$model[[1]]$coefficients[["(Intercept)"]],
+                       ZAR = model$model[[1]]$coefficients[["ZAR_Change"]],
                        OIL = model$model[[1]]$coefficients[["OIL"]],
                        GOLD = model$model[[1]]$coefficients[["GOLD"]],
                        SWAP = model$model[[1]]$coefficients[["SWAP"]])
@@ -273,11 +274,13 @@ Macro <- Macro %>%
 ## Calculating the total macro exposure of the portfolio for a specific month
 ```{r}
 Tot_macro <- function(df){
-  exp <- tibble(ZAR = df$RP_Weight*df$ZAR,
+  exp <- tibble(Alpha = df$RP_Weight*df$Alpha,
+                ZAR = df$RP_Weight*df$ZAR,
                 OIL = df$RP_Weight*df$OIL,
                 GOLD = df$RP_Weight*df$GOLD,
                 SWAP = df$RP_Weight*df$SWAP)
-  tot_exposure <- tibble(ZAR = sum(exp$ZAR),
+  tot_exposure <- tibble(Alpha = sum(exp$Alpha),
+                         ZAR = sum(exp$ZAR),
                          OIL = sum(exp$OIL),
                          GOLD = sum(exp$GOLD),
                          SWAP = sum(exp$SWAP))
