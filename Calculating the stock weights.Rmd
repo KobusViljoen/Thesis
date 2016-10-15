@@ -235,9 +235,9 @@ RP_Ret_VOL$date <- RP_Ret_VOL$date %>%
 # In this case only the JSE All Share index is used, since it had data from before 2001.
 # If another benchmark need to be added, the starting date needs to be changed since I compare cumulative returns
 RP_Ret_VOL <- RP_Ret_VOL %>% 
-  left_join(risk %>% unnest(risk) %>% select(date,RP_SD,MC_SD),by="date") %>%
   left_join(JALSH_returns,by = "date") %>% 
-  select(-PX_LAST)
+  select(-PX_LAST) %>% 
+  na.omit()  # Omitting the last row, which has no data due to the dates moving one period forward
 ```
 
 ## Combining the macro expsoure of the selected stocks with the tibble containing stock weights
