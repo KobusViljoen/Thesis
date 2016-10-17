@@ -246,7 +246,7 @@ Make sure that the macroeconomic file was executed before the following chunks
 # A loop is run over all the rebalancing dates in the outer_combine function
 # In the inner map function, the macro exposures are combined with their corresponding shares for the specific date.
 outer_combine <- function(df,df1){
-  exposure <- exposure_per_reb_date %>% 
+  exposure <- exposure_per_reb_date_gruber %>% 
     filter(dates == df) %>%
     select(exposure)
   df1 %>%
