@@ -91,7 +91,7 @@ macro_per_share <- macro_per_share %>%
   mutate(data = map(dates,collect_data))
 ```
 
-## Calculating the macro exposure of each stock
+## Calculating the macro exposure of each stock using Gruber
 This is based on a time series regression over the past 52 weeks
 4 linear regression functions are written, in order to make the macro factors uncorrelated with each other.
 
@@ -134,6 +134,6 @@ macro_exposure <- function(df){
   
 }
 # This function of linear regression functions are mapped over all the rebalancing dates and over all the stocks, given their yearly data up to that specific date
-exposure_per_reb_date <- macro_per_share %>% mutate(exposure = map(data,macro_exposure))
+exposure_per_reb_date_gruber <- macro_per_share %>% mutate(exposure = map(data,macro_exposure))
 ```
 
