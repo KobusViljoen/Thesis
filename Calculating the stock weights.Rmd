@@ -168,6 +168,9 @@ risk <- Closing %>% mutate(risk = map2(ret_matrix,returns,risk))
 ## the reason for this is, that the weights calculated at a certain time need to be multiplied with the returns over the period that follows.
 risk$date <- risk$date %>% lead()
 risk <- risk %>% na.omit()
+# This chunk still needs to be updated, as I don't take the returns of the latest period into account
+# The lead function should not be neseccary
+# The SD should be calculated up to the end of a rebalancing period
 ```
 
 ## Calculating the benchmark's performance
