@@ -26,6 +26,7 @@ An equity screen is done to extract all of the stocks listed on the JSE All Shar
 The screen's name is AllData, it also looks at the relevant fundamental factors of the stocks.
 This was also done as a test, to see if I could do an equity screen from inside R.
 ```{r , eval=FALSE}
+# This is done, just to get a base of the tickers in order to extract daily,weekly,monthly ect. data and to get the corresponding rebalancing dates
 eqs15 <- beqs(screenName = "AllData",date = ymd("20150101"))
 TickerNames15 <- eqs15$Ticker
 ```
@@ -49,9 +50,36 @@ close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,dail
        data = map(selection,function(selection){
          bdh(securities = as.character(TickerNames15),
              fields = "PX_LAST",
-             start.date=ymd("1998-01-01"),
+             start.date=ymd("2002-01-01"),
              options=selection)
        }))
+```
+
+## Importing data for cross sectional selection
+```{r}
+dates <- close_prices$data[[2]]$`SOL SJ Equity`$date
+cross_sec_Fund_data <- tibble(date = dates)
+
+eqs1 <- function(df){
+  beqs(screenName = "AllData",date = ymd(df))
+}
+
+cross_sec_Fund_data <- cross_sec_Fund_data %>%
+  mutate(Fundamental = map(date,eqs1))
+
+## Need to extract all of the Tickers now, using all of the equity screen results and run the close prices function again, the one in the previous chunk.
+unlisted_data <- cross_sec_Fund_data %>% unnest(Fundamental)
+TickerNames <- unlisted_data$Ticker %>% unique()
+
+close_prices <- tibble(selection = list(monthly,quarterly,halfyearly,yearly,daily,weekly),
+       data = map(selection,function(selection){
+         bdh(securities = as.character(TickerNames),
+             fields = "PX_LAST",
+             start.date=ymd("1999-01-01"),
+             options=selection)
+       }))
+## Should use 3 years data for RP weight calculation
+
 ```
 
 ##Extracting daily fundamental data for each stock
@@ -65,12 +93,13 @@ fields <- tibble(fields = c("CUR_MKT_CAP",
                             "GROSS_PROFIT",
                             "EARN_YLD_HIST",
                             "VOLATILITY_60D",
-                            "VOLATILITY_260D"))
+                            "VOLATILITY_260D",
+                            "PX_VOLUME"))
 
 extract_daily <- function(df){
-  bdh(securities = as.character(TickerNames15),
+  bdh(securities = as.character(TickerNames),
       fields = df,
-      start.date = ymd("19980101"),
+      start.date = ymd("20000101"),
       options = daily)
 }
 
@@ -82,45 +111,45 @@ Fundamental_Data <- fields %>%
 ```{r}
 OIL_daily <- bdh("CL1 Comdty",
            fields = "PX_LAST",
-           start.date = ymd("19980101"))
+           start.date = ymd("20000101"))
 ZAR_daily <- bdh("ZAR Curncy",
            fields = "PX_LAST",
-           start.date = ymd("19980101"))
+           start.date = ymd("20000101"))
 GOLD_daily <- bdh("GC1 Comdty",
            fields = "PX_LAST",
-           start.date = ymd("19980101"))
+           start.date = ymd("20000101"))
 SWAP_daily <- bdh("SASW10 Curncy",
            fields = "PX_LAST",
-           start.date = ymd("19980101"))
+           start.date = ymd("20000101"))
 SA_Bond_daily <- bdh("GSAB10YR Index",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = daily)
 
 
 OIL_weekly <- bdh("CL1 Comdty",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 ZAR_weekly <- bdh("ZAR Curncy",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 GOLD_weekly <- bdh("GC1 Comdty",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 SWAP_weekly <- bdh("SASW10 Curncy",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 GDP_weekly <- bdh("SACGDP Index",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 SA_Bond_weekly <- bdh("GSAB10YR Index",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = weekly)
 ```
 
@@ -129,13 +158,18 @@ SA_Bond_weekly <- bdh("GSAB10YR Index",
 # The JASLH and SWIX are extracted now, further attention will be given to the correct benchmark.
 JALSH <- bdh("JALSH Index",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = daily)
-SWIX <- bdh("STXSWX SJ Equity",
+SWIX <- bdh("JSHRALTR Index",
            fields = "PX_LAST",
-           start.date = ymd("19980101"),
+           start.date = ymd("20000101"),
            options = daily)
 ```
+
+
+
+
+
 
 
 

@@ -55,13 +55,24 @@ Returns <- function(df1,df2){
     unnest(logret) %>%
     group_by(Ticker) %>%
     filter(Ticker %in% Tickers$Ticker) %>%
-    filter(date <= df2,date >= df2 - years(1)) %>%
-    nest()
+    filter(date <= df2,date >= df2 - years(2)) %>%
+    nest() %>%
+    left_join(df1,by = "Ticker")
 }
 ## Example for the volatility model
 # This will be done for each model
-Closing <- VOL_Model %>% 
+Closing <- cross_sec_Fund_data_VOL %>% 
   mutate(returns = map2(stocks,date,Returns))
+
+# Remove the stocks with less than 245 days of data points
+# add a column to each returns tibble, which will show the number of rows for a specific share
+complete_data <- function(df){
+  extension <- df %>% mutate(size = map_dbl(df$data,NROW))
+  filter(extension,size >= max(size)-5) %>%
+    select(Ticker,data,Market.Cap)
+}
+
+Closing <- Closing %>% mutate(returns = map(returns,complete_data))
 
 ## Creating a matrix with all the returns for the selected stocks.
 Return_Matrix <- function(df){
@@ -78,12 +89,13 @@ Closing <- Closing %>%
 
 ## Market Cap weights for the volatility model
 ```{r}
-MC_weights <- VOL_Model %>% mutate(MC_Weight = map(stocks,function(df){
+MC_weights <- Closing %>% mutate(MC_Weight = map(returns,function(df){
   df %>%
-    mutate(MC_Weight = Market_Cap/sum(Market_Cap)) %>%
+    mutate(MC_Weight = Market.Cap/sum(Market.Cap)) %>%
     select(c(Ticker,MC_Weight))
 }))
 
+MC_weights <- MC_weights %>% select(date,MC_Weight)
 ```
 
 
@@ -117,17 +129,21 @@ pspec <- add.constraint(portfolio = pspec,
                         max_sum =1)
 pspec <- add.constraint(portfolio = pspec,
                         type = "box",
-                        min = 0,
+                        min = 0.0,
                         max = 0.15)
 pspec <- add.objective(portfolio = pspec,
+                       type = "return",
+                       name = "mean")
+#pspec <- add.objective(portfolio=pspec,
+#                       type = "risk",
+#                       name = "ETL")
+pspec <- add.objective(portfolio =  pspec ,
                        type= "risk_budget",
-                       name = "ES",
-                       arguments = list(p=0.95),
+                       name = "StdDev",
                        min_concentration = TRUE)
 opt <- optimize.portfolio(returns,
                           pspec,
-                          optimize_method = "ROI",
-                          trace = TRUE)
+                          optimize_method = "ROI")
 RP_weights <- opt$weights
 }
 # Mapping the optimization function over all the periods
@@ -220,18 +236,18 @@ Closing <- Closing %>%
 # get the total return for a 3 month period.
 #Mapping a sum_returns function over the total return list in the closing tibble
 RP_Ret <- Closing %>% 
-  mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret)),
-         MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret))) %>% 
+  mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret,na.rm = T)),
+         MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret,na.rm = T))) %>% 
   select(date,RP_Ret,MC_Ret)
 
 # adding the cumulative return tibble to the RP_Ret_VOL model
 # Joining the return table with the SD for the RP portfolio and MC portfolio
 RP_Ret_VOL <- RP_Ret %>% 
   mutate(RP_cum_ret = cumprod(RP_Ret+1) ,
-         MC_cum_ret = cumprod(MC_Ret+1))
-  
-RP_Ret_VOL$date <- RP_Ret_VOL$date %>%
-  lead()
+         MC_cum_ret = cumprod(MC_Ret+1)) %>%
+  dplyr::rename(Rebalancing_Date = date) %>%
+  mutate(date = lead(Rebalancing_Date))
+
 # This tibble gives a summary of the performance up to a specific date.
 
 # Adding the benchmark's performance.
@@ -240,7 +256,9 @@ RP_Ret_VOL$date <- RP_Ret_VOL$date %>%
 RP_Ret_VOL <- RP_Ret_VOL %>% 
   left_join(JALSH_returns,by = "date") %>% 
   select(-PX_LAST) %>% 
-  na.omit()  # Omitting the last row, which has no data due to the dates moving one period forward
+  na.omit() %>%
+  dplyr::rename(End_Date = date)
+  # Omitting the last row, which has no data due to the dates moving one period forward
 ```
 
 ## Combining the macro expsoure of the selected stocks with the tibble containing stock weights
