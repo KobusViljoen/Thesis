@@ -30,7 +30,7 @@ stock_select <- function(df){
     filter(Market.Cap > quantile(Market.Cap,0.05)) %>%
     filter(!is.na(Sequential.ZScore.Current.Earnings.Yield.)) %>%
     filter(Sequential.ZScore.Current.Earnings.Yield. >
-             quantile(Sequential.ZScore.Current.Earnings.Yield.,0.5)) %>%
+             quantile(Sequential.ZScore.Current.Earnings.Yield.,0.65)) %>%
     select(c(Ticker,GICS.Sector,Market.Cap,Earnings.Yield)) %>% 
     as_tibble()
 }
@@ -45,7 +45,7 @@ stock_select <- function(df){
     filter(Market.Cap > quantile(Market.Cap,0.05)) %>%
     filter(!is.na(Sequential.ZScore.60.Day.Annualized.Volatility.)) %>%
     filter(Sequential.ZScore.60.Day.Annualized.Volatility. <
-             quantile(Sequential.ZScore.60.Day.Annualized.Volatility.,0.5)) %>%
+             quantile(Sequential.ZScore.60.Day.Annualized.Volatility.,0.3)) %>%
     select(c(Ticker,GICS.Sector,Market.Cap,Volat.D.60)) %>% 
     as_tibble()
 }
@@ -75,7 +75,7 @@ stock_select <- function(df){
     filter(Market.Cap > quantile(Market.Cap,0.05)) %>%
     filter(!is.na(Sequential.ZScore.1.Year.Total.Return.)) %>%
     filter(Sequential.ZScore.1.Year.Total.Return. >
-             quantile(Sequential.ZScore.1.Year.Total.Return.,0.5)) %>%
+             quantile(Sequential.ZScore.1.Year.Total.Return.,0.7)) %>%
     select(c(Ticker,GICS.Sector,Market.Cap,Total.Return.Y.1)) %>% 
     as_tibble()
 }
@@ -95,8 +95,8 @@ stock_select <- function(df){
     mutate(Z_ALL = Sequential.ZScore.Current.Earnings.Yield. + Sequential.ZScore.1.Year.Total.Return. +
              Sequential.ZScore.LF.Gross.Profit. - Sequential.ZScore.60.Day.Annualized.Volatility.) %>%
     filter(Z_ALL >
-             quantile(Z_ALL,0.35)) %>%
-    select(c(Ticker,GICS.Sector,Market.Cap,Earnings.Yield,Total.Return.Y.1,Gross.Profit.LF,Volat.D.60)) %>% 
+             quantile(Z_ALL,0.4)) %>%
+    select(c(Ticker,Short.Name,GICS.Sector,Market.Cap,Earnings.Yield,Total.Return.Y.1,Gross.Profit.LF,Volat.D.60)) %>% 
     as_tibble()
 }
 
