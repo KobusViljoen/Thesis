@@ -22,7 +22,7 @@ library(purrr)
 library(lubridate)
 library(tibble)
 library(plyr)
-
+#library(FRAPO)
 ```
 
 In this file I want to calculate the weights assigned to each stock that is selected by the corresponding fundamental factor.
@@ -59,12 +59,12 @@ Returns <- function(df1,df2){
     nest() %>%
     left_join(df1,by = "Ticker")
 }
-## Example for the volatility model
+## Example for the Momentum model
 # This will be done for each model
-Closing <- cross_sec_Fund_data_VOL %>% 
+Closing <- cross_sec_Fund_data_MOM %>% 
   mutate(returns = map2(stocks,date,Returns))
 
-# Remove the stocks with less than 245 days of data points
+# Remove the stocks with less than 500 days of data points
 # add a column to each returns tibble, which will show the number of rows for a specific share
 complete_data <- function(df){
   extension <- df %>% mutate(size = map_dbl(df$data,NROW))
@@ -85,6 +85,17 @@ Return_Matrix <- function(df){
 Closing <- Closing %>% 
   mutate(ret_matrix = map(returns,Return_Matrix))
 
+## Return matrix for the use of the equal risk contribution methodology.
+ERC_WEIGHTS <- function(df){
+  cov_matrix <- df[,2:length(colnames(df))] %>%
+    cov(use = "complete.obs")
+  ERC_weights <- FRAPO::PERC(Sigma = cov_matrix,percentage = FALSE)
+  ERC_weights <- as.data.frame(FRAPO::Weights(object = ERC_weights))
+  ERC_weights <- tibble(Ticker = c(rownames(ERC_weights)),ERC_Weight = ERC_weights$`FRAPO::Weights(object = ERC_weights)`)
+}
+Portf_Weights <- Closing %>% 
+  mutate(ERCWeights = map(ret_matrix,ERC_WEIGHTS)) %>%
+  select(date,ERCWeights)
 ```
 
 ## Market Cap weights for the volatility model
@@ -129,14 +140,8 @@ pspec <- add.constraint(portfolio = pspec,
                         max_sum =1)
 pspec <- add.constraint(portfolio = pspec,
                         type = "box",
-                        min = 0.0,
+                        min = 0.001,
                         max = 0.15)
-#pspec <- add.objective(portfolio = pspec,
-#                       type = "return",
-#                       name = "mean")
-#pspec <- add.objective(portfolio=pspec,
-#                       type = "risk",
-#                       name = "ETL")
 pspec <- add.objective(portfolio =  pspec ,
                        type= "risk_budget",
                        name = "StdDev",
@@ -157,36 +162,11 @@ stock_weights <- function(df1,df2){
                 tibble(Ticker = c(Ticker = df2$Ticker),RP_Weight = .),by = "Ticker")
 }
 
-## adding the RP and MC weights 
+## adding the RP, MC and ERC weights 
 Closing <- Closing %>% 
   mutate(returns = map2(RP_weights,returns,stock_weights)) %>%
-  mutate(returns = map2(returns,MC_weights$MC_Weight,left_join))
-```
-
-## The risk of the 2 portfolios (market cap and risk parity weighted)
-```{r}
-#the risk is calculated using the performance analylitics package
-risk <- function(df1,df2){
-  returns <- df1
-  rownames(returns) <- returns[[1]]
-  returns <- as.xts(returns[,2:length(colnames(returns))])
-  RP_weights <- df2$RP_Weight
-  MC_weights <- df2$MC_Weight
-  RP_SD <- PerformanceAnalytics::StdDev(R = returns %>% na.omit() ,weights = RP_weights)
-  MC_SD <- PerformanceAnalytics::StdDev(R = returns %>% na.omit() ,weights = MC_weights)
-  tibble(RP_SD = RP_SD[[1]],MC_SD = MC_SD[[1]])
-}
-
-risk <- Closing %>% mutate(risk = map2(ret_matrix,returns,risk))
-
-## need to move the dates one period forward in order to merge them with the cumulative returns.
-## The dates are moved one space forward when calculating c portfolio returns
-## the reason for this is, that the weights calculated at a certain time need to be multiplied with the returns over the period that follows.
-risk$date <- risk$date %>% lead()
-risk <- risk %>% na.omit()
-# This chunk still needs to be updated, as I don't take the returns of the latest period into account
-# The lead function should not be neseccary
-# The SD should be calculated up to the end of a rebalancing period
+  mutate(returns = map2(returns,MC_weights$MC_Weight,left_join)) %>%
+  mutate(returns = map2(returns,Portf_Weights$ERCWeights,left_join))
 ```
 
 ## Calculating the benchmark's performance
@@ -196,6 +176,12 @@ JALSH_returns <- JALSH %>%
   filter(date %in% dates) %>% 
   mutate(JSE_log_ret = c(0,diff(log(PX_LAST)))) %>%
   mutate(JSE_cum_ret = cumprod(1+JSE_log_ret))
+SWIX_returns <- SWIX %>%
+  filter(date %in% dates) %>%
+  mutate(SWIX_log_ret = c(0,diff(log(PX_LAST)))) %>%
+  mutate(SWIX_cum_ret = cumprod(1+SWIX_log_ret)) %>%
+  select(-PX_LAST)
+# There is actually one quarterly date missing in the SWIX data. Wont make difference to cumulative returns at the end.
 ```
 
 
@@ -225,7 +211,9 @@ Tot_return <- function(df1,df2){
     unnest(logret) %>%
     filter(date == df2,Ticker %in% Tickers) %>%
     right_join(df1,by="Ticker") %>%
-    mutate(RP_tot_ret = RP_Weight*log_ret, MC_tot_ret = MC_Weight*log_ret)
+    mutate(RP_tot_ret = RP_Weight*log_ret, 
+           MC_tot_ret = MC_Weight*log_ret,
+           ERC_tot_ret = ERC_Weight*log_ret)
 }
 
 # Mapping the function and adding a new list : tot_ret to the closing tibble
@@ -236,15 +224,16 @@ Closing <- Closing %>%
 # get the total return for a 3 month period.
 #Mapping a sum_returns function over the total return list in the closing tibble
 RP_Ret <- Closing %>% 
-  mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret,na.rm = T)),
-         MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret,na.rm = T))) %>% 
-  select(date,RP_Ret,MC_Ret)
+  mutate(RP_Ret = map_dbl(tot_ret,function(df) sum(df$RP_tot_ret)),
+         MC_Ret = map_dbl(tot_ret,function(df) sum(df$MC_tot_ret)),
+         ERC_Ret = map_dbl(tot_ret,function(df) sum(df$ERC_tot_ret))) %>% 
+  select(date,RP_Ret,MC_Ret,ERC_Ret)
 
-# adding the cumulative return tibble to the RP_Ret_VOL model
-# Joining the return table with the SD for the RP portfolio and MC portfolio
-RP_Ret_VOL <- RP_Ret %>% 
+# adding the cumulative return tibble to the RP_Ret_MOM model
+RP_Ret_MOM <- RP_Ret %>% 
   mutate(RP_cum_ret = cumprod(RP_Ret+1) ,
-         MC_cum_ret = cumprod(MC_Ret+1)) %>%
+         MC_cum_ret = cumprod(MC_Ret+1),
+         ERC_cum_ret = cumprod(ERC_Ret+1)) %>%
   dplyr::rename(Rebalancing_Date = date) %>%
   mutate(date = lead(Rebalancing_Date))
 
@@ -253,12 +242,12 @@ RP_Ret_VOL <- RP_Ret %>%
 # Adding the benchmark's performance.
 # In this case only the JSE All Share index is used, since it had data from before 2001.
 # If another benchmark need to be added, the starting date needs to be changed since I compare cumulative returns
-RP_Ret_VOL <- RP_Ret_VOL %>% 
+RP_Ret_MOM <- RP_Ret_MOM %>% 
   left_join(JALSH_returns,by = "date") %>% 
+  left_join(SWIX_returns,by = "date") %>%
   select(-PX_LAST) %>% 
-  na.omit() %>%
   dplyr::rename(End_Date = date)
-  # Omitting the last row, which has no data due to the dates moving one period forward
+  # The last row still needs to be omitted, since data up to current date are not incorporated 
 ```
 
 ## Combining the macro expsoure of the selected stocks with the tibble containing stock weights
