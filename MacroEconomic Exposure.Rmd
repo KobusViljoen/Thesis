@@ -72,7 +72,7 @@ dates <- close_prices$data[[2]] %>%
   bind_rows(.id="Ticker") %>% 
   group_by(date) %>% 
   nest() %>%
-  filter(date >= date[14]) %>%
+  filter(date >= date[13]) %>%
   select(date)
 
 # Creating a tibble with the rebalancing dates
